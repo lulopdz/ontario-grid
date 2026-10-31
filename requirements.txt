@@ -1,2 +1,3 @@
 pandas>=2.2
 requests>=2.31
+plotly==5.24.1  # only for plotly.min.js, copied into the site by build.py

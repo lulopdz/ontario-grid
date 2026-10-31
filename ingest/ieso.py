@@ -10,6 +10,7 @@ What each report keeps online decides how far back a reader can go:
       every hour and the price history was seeded from lrg-dashboard (back to 2025-05-20)."""
 import io
 import re
+import time
 import xml.etree.ElementTree as ET
 
 import pandas as pd
@@ -30,13 +31,26 @@ def market_now():
     return pd.Timestamp.now(tz="UTC").tz_convert("-05:00")
 
 
+RETRIES = 4  # IESO's server resets the odd connection; one reset used to abort the whole update
+
+
 def get(url):
-    """Body of url, or None on 404 (not published yet / no longer kept)."""
-    r = SESSION.get(url, timeout=120)
-    if r.status_code == 404:
-        return None
-    r.raise_for_status()
-    return r.content
+    """Body of url, or None on 404 (not published yet / no longer kept). Connection errors and
+    5xx answers are retried with a growing pause (2, 4, 8 s) before giving up."""
+    for attempt in range(RETRIES):
+        try:
+            r = SESSION.get(url, timeout=120)
+            if r.status_code == 404:
+                return None
+            if r.status_code < 500:
+                r.raise_for_status()
+                return r.content
+            error = requests.HTTPError(f"{r.status_code} for {url}")
+        except (requests.ConnectionError, requests.Timeout, requests.exceptions.ChunkedEncodingError) as e:
+            error = e
+        if attempt < RETRIES - 1:
+            time.sleep(2 ** (attempt + 1))
+    raise error
 
 
 def listing(report):

@@ -98,3 +98,4 @@ figcaption { margin-bottom: 4px; }
   .chart.tall { height: 320px; }
   .tile .value { font-size: 22px; }
 }
+.theme.lang { width: auto; min-width: 34px; padding: 0 9px; font: 600 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif; letter-spacing: 0.04em; }

@@ -1,20 +1,121 @@
 // Ontario Grid: loads data/*.json (built by build.py) on demand and draws each view with Plotly.
 // Times are IESO market time (EST all year); every timestamp is the start of its hour.
+// English by default; Spanish behind the EN/ES button (the choice is remembered).
 (() => {
   const $ = (s) => document.querySelector(s);
   const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-  const fmt = (v, d = 0) => (v == null || Number.isNaN(v) ? '—' : v.toLocaleString('es-MX', { minimumFractionDigits: d, maximumFractionDigits: d }));
-  const money = (v, d = 2) => (v == null || Number.isNaN(v) ? '—' : (v < 0 ? '−$' : '$') + fmt(Math.abs(v), d));
-  const mw = (v) => fmt(v) + ' MW';
   const mean = (a) => { const x = a.filter((v) => v != null); return x.length ? x.reduce((s, v) => s + v, 0) / x.length : null; };
 
-  const FUELS = [['nuclear', 'Nuclear'], ['gas', 'Gas'], ['hydro', 'Hidro'], ['wind', 'Eólica'], ['solar', 'Solar'], ['biofuel', 'Biocombustible']];
-  const NEIGHBOURS = [['quebec', 'Québec'], ['new_york', 'Nueva York'], ['michigan', 'Michigan'], ['minnesota', 'Minnesota'], ['manitoba', 'Manitoba']];
+  // --- strings -----------------------------------------------------------------------------
+  // Static text lives in index.html (English) under data-i18n keys; dynamic text is built here.
+  const STRINGS = {
+    en: {
+      sub: "Ontario's electricity market, from IESO's public data", loading: 'Loading…',
+      themeLabel: 'Toggle light/dark theme', viewsLabel: 'Views', rangeLabel: 'Range',
+      tabPrices: 'Prices', tabGeneration: 'Generation', tabDemand: 'Demand', tabInterties: 'Interties',
+      r7: '7 days', r30: '30 days', r90: '90 days', r365: '1 year', rAll: 'All', zone: 'Zone',
+      hPrices: 'Day-ahead and real-time price', nDart: 'Positive: day-ahead cleared above real-time',
+      tPrices: 'Show table (daily averages)', hMix: 'Generation mix', hGen: 'Generation by fuel',
+      tGen: 'Show table (daily averages, MW)', tDemand: 'Show table (daily, MW)', hInterties: 'Net flow by neighbour',
+      hAdequacy: 'Adequacy: next 7 days', tInterties: 'Show table (daily net flow, MW)',
+      downloads: 'Downloads (CSV, full history):', dlPrices: 'prices', dlGeneration: 'generation', dlDemand: 'demand',
+      dlInterties: 'interties', dlAdequacy: 'adequacy', code: 'Source code',
+      source: 'Source: IESO public reports, refreshed about every hour. Times are IESO market time (EST, no daylight saving). Independent project, not affiliated with IESO.',
+      langButton: 'ES', langLabel: 'Ver en español',
+      fuels: { nuclear: 'Nuclear', gas: 'Gas', hydro: 'Hydro', wind: 'Wind', solar: 'Solar', biofuel: 'Biofuel' },
+      neighbours: { quebec: 'Quebec', new_york: 'New York', michigan: 'Michigan', minnesota: 'Minnesota', manitoba: 'Manitoba' },
+      lastDays: (n) => `last ${n} days`, allHistory: 'full history', hourly: 'hourly', dailyAvg: 'daily average', day: 'Day',
+      updated: (b, rt) => `Updated ${b} · real-time through ${rt} EST`,
+      error: "Couldn't load the data. Try reloading the page.",
+      daAvg: 'Average day-ahead', rtAvg: 'Average real-time', dartAvg: 'Average DART', settledHours: 'settled hours',
+      hoursPos: 'Hours with DART > 0', hours: (n) => `${n} hours`,
+      pricesNote: (h, z, d) => `$/MWh, ${h}, ${z} zone. Day-ahead published through ${d}.`,
+      genNote: (h) => `MW, ${h}, transmission-connected generation`,
+      mixNote: (r) => `Each fuel's share of the energy generated, ${r}`,
+      peak: 'Peak demand', avgDemand: 'Average demand', fcError: 'Forecast error', noForecast: 'no forecast in this range',
+      fcErrorHint: (p) => `mean absolute, ${p}% of demand`, marketDemand: 'Market demand', marketHint: 'average; includes exports',
+      demandTitleH: 'Ontario demand: actual and forecast',
+      demandNoteH: 'MW, hourly. Forecast: the last one IESO published before each day began (available since Sep 17, 2026)',
+      actual: 'Actual', forecast: 'Forecast', actualAvg: 'Actual (avg)', forecastAvg: 'Forecast (avg)', marketAvg: 'Market (avg)',
+      periodPeak: 'Peak in range', daysInRange: 'Days in range', since: (d) => `since ${d}`,
+      demandTitleD: 'Ontario demand: daily peak and average', demandNoteD: 'MW, daily', dailyPeak: 'Daily peak', dailyAvgDemand: 'Daily average',
+      peakCol: 'Peak', avgCol: 'Average',
+      netFlow: 'Total net flow', netHint: (exp, r) => `average net ${exp ? 'export' : 'import'}, ${r}`,
+      topTrade: 'Largest exchange', topHint: (v, exp) => `${v} average (${exp ? 'exports' : 'imports'})`,
+      minMargin: 'Lowest margin, next 7 days',
+      intertiesNote: (h) => `MW, ${h}. Positive: Ontario exports; negative: imports`,
+      adequacyNote: (c) => `MW, hourly. Forecast supply capacity against what is required (demand, reserves and exports). IESO forecast of ${c}`,
+      supply: 'Supply capacity', required: 'Required', total: 'Total',
+    },
+    es: {
+      sub: 'El mercado eléctrico de Ontario, con los datos públicos de IESO', loading: 'Cargando…',
+      themeLabel: 'Cambiar tema claro/oscuro', viewsLabel: 'Vistas', rangeLabel: 'Rango',
+      tabPrices: 'Precios', tabGeneration: 'Generación', tabDemand: 'Demanda', tabInterties: 'Interconexiones',
+      r7: '7 días', r30: '30 días', r90: '90 días', r365: '1 año', rAll: 'Todo', zone: 'Zona',
+      hPrices: 'Precio day-ahead y real-time', nDart: 'Positivo: el day-ahead liquidó por encima del real-time',
+      tPrices: 'Ver tabla (promedios diarios)', hMix: 'Mezcla de generación', hGen: 'Generación por fuente',
+      tGen: 'Ver tabla (promedios diarios, MW)', tDemand: 'Ver tabla (diaria, MW)', hInterties: 'Flujo neto por vecino',
+      hAdequacy: 'Adecuación: próximos 7 días', tInterties: 'Ver tabla (flujo neto diario, MW)',
+      downloads: 'Descargas (CSV, historia completa):', dlPrices: 'precios', dlGeneration: 'generación', dlDemand: 'demanda',
+      dlInterties: 'interconexiones', dlAdequacy: 'adecuación', code: 'Código',
+      source: 'Fuente: reportes públicos de IESO, actualizados cada hora aproximadamente. Horas en hora de mercado de IESO (EST, sin horario de verano). Proyecto independiente, sin afiliación con IESO.',
+      langButton: 'EN', langLabel: 'View in English',
+      fuels: { nuclear: 'Nuclear', gas: 'Gas', hydro: 'Hidro', wind: 'Eólica', solar: 'Solar', biofuel: 'Biocombustible' },
+      neighbours: { quebec: 'Québec', new_york: 'Nueva York', michigan: 'Michigan', minnesota: 'Minnesota', manitoba: 'Manitoba' },
+      lastDays: (n) => `últimos ${n} días`, allHistory: 'toda la historia', hourly: 'por hora', dailyAvg: 'promedio diario', day: 'Día',
+      updated: (b, rt) => `Actualizado ${b} · real-time hasta ${rt} EST`,
+      error: 'No se pudieron cargar los datos. Prueba recargar la página.',
+      daAvg: 'Day-ahead promedio', rtAvg: 'Real-time promedio', dartAvg: 'DART promedio', settledHours: 'horas liquidadas',
+      hoursPos: 'Horas con DART > 0', hours: (n) => `${n} horas`,
+      pricesNote: (h, z, d) => `$/MWh, ${h}, zona ${z}. Day-ahead publicado hasta el ${d}.`,
+      genNote: (h) => `MW, ${h}, generación conectada a la red de transmisión`,
+      mixNote: (r) => `Participación de cada fuente en la energía generada, ${r}`,
+      peak: 'Demanda máxima', avgDemand: 'Demanda promedio', fcError: 'Error del pronóstico', noForecast: 'sin pronóstico en el rango',
+      fcErrorHint: (p) => `promedio absoluto, ${p}% de la demanda`, marketDemand: 'Demanda de mercado', marketHint: 'promedio; incluye exportaciones',
+      demandTitleH: 'Demanda de Ontario: real y pronóstico',
+      demandNoteH: 'MW por hora. Pronóstico: el último publicado por IESO antes de empezar cada día (disponible desde el 17/09/2026)',
+      actual: 'Real', forecast: 'Pronóstico', actualAvg: 'Real (prom.)', forecastAvg: 'Pronóstico (prom.)', marketAvg: 'Mercado (prom.)',
+      periodPeak: 'Pico del período', daysInRange: 'Días en el rango', since: (d) => `desde ${d}`,
+      demandTitleD: 'Demanda de Ontario: pico y promedio diario', demandNoteD: 'MW por día', dailyPeak: 'Pico diario', dailyAvgDemand: 'Promedio diario',
+      peakCol: 'Pico', avgCol: 'Promedio',
+      netFlow: 'Flujo neto total', netHint: (exp, r) => `${exp ? 'exportación' : 'importación'} neta promedio, ${r}`,
+      topTrade: 'Mayor intercambio', topHint: (v, exp) => `${v} promedio (${exp ? 'exporta' : 'importa'})`,
+      minMargin: 'Margen mínimo, próximos 7 días',
+      intertiesNote: (h) => `MW, ${h}. Positivo: Ontario exporta; negativo: importa`,
+      adequacyNote: (c) => `MW por hora. Capacidad de suministro pronosticada frente a lo requerido (demanda, reservas y exportaciones). Pronóstico de IESO del ${c}`,
+      supply: 'Capacidad de suministro', required: 'Requerido', total: 'Total',
+    },
+  };
+  // Dates: English reads "Oct 30"; Spanish keeps day/month, since Plotly's month names are English.
+  const DATES = {
+    en: { tick: '%b %d', tickLong: '%b %Y', hover: '%b %d, %Y %H:%M', hoverDay: '%b %d, %Y', locale: 'en-CA' },
+    es: { tick: '%d/%m', tickLong: '%m/%Y', hover: '%d/%m/%Y %H:%M', hoverDay: '%d/%m/%Y', locale: 'es-MX' },
+  };
+
+  const FUEL_KEYS = ['nuclear', 'gas', 'hydro', 'wind', 'solar', 'biofuel'];
+  const NEIGHBOUR_KEYS = ['quebec', 'new_york', 'michigan', 'minnesota', 'manitoba'];
   const HOURLY_MAX_DAYS = 90; // longer ranges read the daily series (build.py keeps 120 days hourly)
 
-  const state = { view: 'prices', days: 30, zone: 'TORONTO' };
+  const state = { view: 'prices', days: 30, zone: 'TORONTO', lang: 'en' };
+  const L = () => STRINGS[state.lang] || STRINGS.en;
+  const fmt = (v, d = 0) => (v == null || Number.isNaN(v) ? '—'
+    : v.toLocaleString(DATES[state.lang].locale, { minimumFractionDigits: d, maximumFractionDigits: d }));
+  const money = (v, d = 2) => (v == null || Number.isNaN(v) ? '—' : (v < 0 ? '−$' : '$') + fmt(Math.abs(v), d));
+  const mw = (v) => fmt(v) + ' MW';
+
   const cache = {};
   const load = (name) => (cache[name] ||= fetch(`data/${name}.json`).then((r) => { if (!r.ok) throw new Error(name); return r.json(); }));
+
+  function applyStrings() {
+    const s = L();
+    document.documentElement.lang = state.lang;
+    document.querySelectorAll('[data-i18n]').forEach((el) => { if (typeof s[el.dataset.i18n] === 'string') el.textContent = s[el.dataset.i18n]; });
+    document.querySelectorAll('[data-i18n-aria]').forEach((el) => el.setAttribute('aria-label', s[el.dataset.i18nAria]));
+    const btn = $('#lang');
+    btn.textContent = s.langButton;
+    btn.setAttribute('aria-label', s.langLabel);
+    btn.lang = state.lang === 'en' ? 'es' : 'en';
+  }
 
   // --- data helpers ------------------------------------------------------------------------
   // Rows of a columnar {t: [...], col: [...]} object whose day is within `days` of the last one.
@@ -49,13 +150,14 @@
   const config = { responsive: true, displayModeBar: false };
   function layout(extra = {}, hourly = true) {
     const surface = css('--surface');
+    const dt = DATES[state.lang];
     return {
       paper_bgcolor: surface, plot_bgcolor: surface,
       font: { family: 'system-ui, -apple-system, "Segoe UI", sans-serif', size: 12, color: css('--ink-2') },
       margin: { l: 58, r: 12, t: 30, b: 36 },
       xaxis: { type: 'date', gridcolor: css('--grid'), linecolor: css('--axis'), showline: true, zeroline: false,
-               tickfont: { color: css('--muted') }, tickformat: hourly ? '%d/%m' : '%m/%Y',
-               hoverformat: hourly ? '%d/%m/%Y %H:%M' : '%d/%m/%Y' },
+               tickfont: { color: css('--muted') }, tickformat: hourly ? dt.tick : dt.tickLong,
+               hoverformat: hourly ? dt.hover : dt.hoverDay },
       yaxis: { gridcolor: css('--grid'), zerolinecolor: css('--axis'), tickfont: { color: css('--muted') }, separatethousands: true },
       legend: { orientation: 'h', x: 0, y: 1.02, yanchor: 'bottom', font: { color: css('--ink-2') } },
       hovermode: 'x unified',
@@ -79,68 +181,68 @@
       rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   }
   const lastDays = (obj, n = 14) => obj.t.map((_, i) => i).slice(-n).reverse();
-  const rangeLabel = () => (state.days ? `últimos ${state.days} días` : 'toda la historia');
+  const rangeLabel = () => (state.days ? L().lastDays(state.days) : L().allHistory);
+  const stamp = (t) => (t ? `${t.slice(0, 10)}, ${t.slice(11)} EST` : '');
 
   // --- views -------------------------------------------------------------------------------
   async function prices() {
+    const s = L();
     const all = await load(`prices_${state.zone}`);
     const hourly = state.days && state.days <= HOURLY_MAX_DAYS;
     const h = slice(all, state.days);
     const d = hourly ? h : dailyMean(h);
-    const withRt = h.rt.map((v, i) => (v == null || h.da[i] == null ? null : i)).filter((i) => i != null);
-    const dart = withRt.map((i) => h.dart[i]);
-    const lastDa = all.t[all.t.length - 1].slice(0, 10);
+    const dart = h.t.map((_, i) => i).filter((i) => h.rt[i] != null && h.da[i] != null).map((i) => h.dart[i]);
     tiles('#prices-tiles', [
-      ['Day-ahead promedio', money(mean(h.da)), rangeLabel()],
-      ['Real-time promedio', money(mean(h.rt)), rangeLabel()],
-      ['DART promedio', money(mean(dart)), `${rangeLabel()}, horas liquidadas`],
-      ['Horas con DART > 0', dart.length ? fmt((dart.filter((v) => v > 0).length / dart.length) * 100, 0) + '%' : '—', `${fmt(dart.length)} horas`],
+      [s.daAvg, money(mean(h.da)), rangeLabel()],
+      [s.rtAvg, money(mean(h.rt)), rangeLabel()],
+      [s.dartAvg, money(mean(dart)), `${rangeLabel()}, ${s.settledHours}`],
+      [s.hoursPos, dart.length ? fmt((dart.filter((v) => v > 0).length / dart.length) * 100, 0) + '%' : '—', s.hours(fmt(dart.length))],
     ]);
-    $('#prices-note').textContent = `$/MWh, ${hourly ? 'por hora' : 'promedio diario'}, zona ${state.zone}. Day-ahead publicado hasta el ${lastDa}.`;
-    draw('chart-prices', [line(d.t, d.da, 'Day-ahead', css('--s1'), '$'), line(d.t, d.rt, 'Real-time', css('--s2'), '$')],
-      layout({}, hourly));
+    $('#prices-note').textContent = s.pricesNote(hourly ? s.hourly : s.dailyAvg, state.zone, all.t[all.t.length - 1].slice(0, 10));
+    draw('chart-prices', [line(d.t, d.da, 'Day-ahead', css('--s1'), '$'), line(d.t, d.rt, 'Real-time', css('--s2'), '$')], layout({}, hourly));
     const pos = css('--pos'), neg = css('--neg');
     draw('chart-dart', [{
       x: d.t, y: d.dart, type: 'bar', name: 'DART', marker: { color: d.dart.map((v) => (v >= 0 ? pos : neg)) },
       hovertemplate: '%{y:$,.2f} $/MWh<extra>DART</extra>',
     }], layout({ showlegend: false, bargap: 0.15, margin: { l: 58, r: 12, t: 8, b: 36 } }, hourly));
     const dd = dailyMean(h);
-    table('#prices-table', ['Día', 'Day-ahead', 'Real-time', 'DART'],
+    table('#prices-table', [s.day, 'Day-ahead', 'Real-time', 'DART'],
       lastDays(dd).map((i) => [dd.t[i], money(dd.da[i]), money(dd.rt[i]), money(dd.dart[i])]));
   }
 
   async function generation() {
+    const s = L();
     const hourly = state.days && state.days <= HOURLY_MAX_DAYS;
-    const src = await load(hourly ? 'generation_hourly' : 'generation_daily');
-    const g = slice(src, state.days);
-    const colors = FUELS.map((_, i) => css(`--s${i + 1}`));
+    const g = slice(await load(hourly ? 'generation_hourly' : 'generation_daily'), state.days);
+    const colors = FUEL_KEYS.map((_, i) => css(`--s${i + 1}`));
+    const names = FUEL_KEYS.map((k) => s.fuels[k]);
     const surface = css('--surface');
-    draw('chart-generation', FUELS.map(([k, label], i) => ({
-      x: g.t, y: g[k], name: label, type: 'scatter', mode: 'lines', stackgroup: 'gen',
+    draw('chart-generation', FUEL_KEYS.map((k, i) => ({
+      x: g.t, y: g[k], name: names[i], type: 'scatter', mode: 'lines', stackgroup: 'gen',
       line: { width: 0.5, color: surface }, fillcolor: colors[i],
-      hovertemplate: `%{y:,.0f} MW<extra>${label}</extra>`,
+      hovertemplate: `%{y:,.0f} MW<extra>${names[i]}</extra>`,
     })), layout({ legend: { ...layout().legend, traceorder: 'normal' } }, hourly));
-    $('#gen-note').textContent = `MW, ${hourly ? 'por hora' : 'promedio diario'}, generación conectada a la red de transmisión`;
+    $('#gen-note').textContent = s.genNote(hourly ? s.hourly : s.dailyAvg);
 
     // The mix over the range: one tall segmented bar, share printed where it fits.
-    const totals = FUELS.map(([k]) => g[k].reduce((s, v) => s + (v || 0), 0));
-    const sum = totals.reduce((s, v) => s + v, 0) || 1;
-    const darkLabel = !matchesDark();
-    $('#mix-note').textContent = `Participación de cada fuente en la energía generada, ${rangeLabel()}`;
-    $('#mix-bar').innerHTML = FUELS.map(([, label], i) => {
-      const share = (totals[i] / sum) * 100;
+    const totals = FUEL_KEYS.map((k) => g[k].reduce((acc, v) => acc + (v || 0), 0));
+    const sum = totals.reduce((acc, v) => acc + v, 0) || 1;
+    const shares = totals.map((v) => (v / sum) * 100);
+    const darkLabel = !matchesDark(); // light mode's yellow takes near-black text
+    $('#mix-note').textContent = s.mixNote(rangeLabel());
+    $('#mix-bar').innerHTML = shares.map((share, i) => {
       if (share <= 0) return '';
-      const txt = share >= 7 ? `${fmt(share, 0)}%` : '';
       const cls = darkLabel && i === 3 ? ' class="dark-label"' : '';
-      return `<div${cls} style="flex:${share} 1 0;background:${colors[i]}" title="${label}: ${fmt(share, 1)}%">${txt}</div>`;
+      return `<div${cls} style="flex:${share} 1 0;background:${colors[i]}" title="${names[i]}: ${fmt(share, 1)}%">${share >= 7 ? `${fmt(share, 0)}%` : ''}</div>`;
     }).join('');
-    $('#mix-bar').setAttribute('aria-label', FUELS.map(([, l], i) => `${l} ${fmt((totals[i] / sum) * 100, 1)}%`).join(', '));
-    $('#mix-legend').innerHTML = FUELS.map(([, l], i) => `<li><i style="background:${colors[i]}"></i>${l} ${fmt((totals[i] / sum) * 100, 1)}%</li>`).join('');
+    $('#mix-bar').setAttribute('aria-label', names.map((n, i) => `${n} ${fmt(shares[i], 1)}%`).join(', '));
+    $('#mix-legend').innerHTML = names.map((n, i) => `<li><i style="background:${colors[i]}"></i>${n} ${fmt(shares[i], 1)}%</li>`).join('');
     const gd = hourly ? dailyMean(g) : g;
-    table('#generation-table', ['Día', ...FUELS.map(([, l]) => l)], lastDays(gd).map((i) => [gd.t[i].slice(0, 10), ...FUELS.map(([k]) => fmt(gd[k][i]))]));
+    table('#generation-table', [s.day, ...names], lastDays(gd).map((i) => [gd.t[i].slice(0, 10), ...FUEL_KEYS.map((k) => fmt(gd[k][i]))]));
   }
 
   async function demand() {
+    const s = L();
     const hourly = state.days && state.days <= HOURLY_MAX_DAYS;
     if (hourly) {
       const h = slice(await load('demand_hourly'), state.days);
@@ -149,71 +251,77 @@
       const avgDemand = mean(pairs.map((i) => h.ontario_demand[i]));
       const peakI = h.ontario_demand.reduce((b, v, i) => (v != null && (b < 0 || v > h.ontario_demand[b]) ? i : b), -1);
       tiles('#demand-tiles', [
-        ['Demanda máxima', mw(h.ontario_demand[peakI]), h.t[peakI] ? `${h.t[peakI].slice(0, 10)}, ${h.t[peakI].slice(11)} EST` : ''],
-        ['Demanda promedio', mw(mean(h.ontario_demand)), rangeLabel()],
-        ['Error del pronóstico', mae == null ? '—' : mw(mae), mae == null ? 'sin pronóstico en el rango' : `promedio absoluto, ${fmt((mae / avgDemand) * 100, 1)}% de la demanda`],
-        ['Demanda de mercado', mw(mean(h.market_demand)), 'promedio; incluye exportaciones'],
+        [s.peak, mw(h.ontario_demand[peakI]), stamp(h.t[peakI])],
+        [s.avgDemand, mw(mean(h.ontario_demand)), rangeLabel()],
+        [s.fcError, mae == null ? '—' : mw(mae), mae == null ? s.noForecast : s.fcErrorHint(fmt((mae / avgDemand) * 100, 1))],
+        [s.marketDemand, mw(mean(h.market_demand)), s.marketHint],
       ]);
-      $('#demand-title').textContent = 'Demanda de Ontario: real y pronóstico';
-      $('#demand-note').textContent = 'MW por hora. Pronóstico: el último publicado por IESO antes de empezar cada día (disponible desde el 17/09/2026)';
-      draw('chart-demand', [line(h.t, h.ontario_demand, 'Real', css('--s1')), line(h.t, h.forecast_demand, 'Pronóstico', css('--s2'))], layout({}, true));
+      $('#demand-title').textContent = s.demandTitleH;
+      $('#demand-note').textContent = s.demandNoteH;
+      draw('chart-demand', [line(h.t, h.ontario_demand, s.actual, css('--s1')), line(h.t, h.forecast_demand, s.forecast, css('--s2'))], layout({}, true));
       const dd = dailyMean(h);
-      table('#demand-table', ['Día', 'Real (prom.)', 'Pronóstico (prom.)', 'Mercado (prom.)'],
+      table('#demand-table', [s.day, s.actualAvg, s.forecastAvg, s.marketAvg],
         lastDays(dd).map((i) => [dd.t[i], fmt(dd.ontario_demand[i]), fmt(dd.forecast_demand[i]), fmt(dd.market_demand[i])]));
     } else {
       const d = slice(await load('demand_daily'), state.days);
       const peakI = d.peak.reduce((b, v, i) => (v != null && (b < 0 || v > d.peak[b]) ? i : b), -1);
       tiles('#demand-tiles', [
-        ['Pico del período', mw(d.peak[peakI]), d.t[peakI] ? d.t[peakI].slice(0, 10) : ''],
-        ['Demanda promedio', mw(mean(d.avg)), rangeLabel()],
-        ['Días en el rango', fmt(d.t.length), `desde ${d.t[0] ? d.t[0].slice(0, 10) : '—'}`],
+        [s.periodPeak, mw(d.peak[peakI]), d.t[peakI] ? d.t[peakI].slice(0, 10) : ''],
+        [s.avgDemand, mw(mean(d.avg)), rangeLabel()],
+        [s.daysInRange, fmt(d.t.length), s.since(d.t[0] ? d.t[0].slice(0, 10) : '—')],
       ]);
-      $('#demand-title').textContent = 'Demanda de Ontario: pico y promedio diario';
-      $('#demand-note').textContent = 'MW por día';
-      draw('chart-demand', [line(d.t, d.peak, 'Pico diario', css('--s1')), line(d.t, d.avg, 'Promedio diario', css('--s2'))], layout({}, false));
-      table('#demand-table', ['Día', 'Pico', 'Promedio'], lastDays(d).map((i) => [d.t[i].slice(0, 10), fmt(d.peak[i]), fmt(d.avg[i])]));
+      $('#demand-title').textContent = s.demandTitleD;
+      $('#demand-note').textContent = s.demandNoteD;
+      draw('chart-demand', [line(d.t, d.peak, s.dailyPeak, css('--s1')), line(d.t, d.avg, s.dailyAvgDemand, css('--s2'))], layout({}, false));
+      table('#demand-table', [s.day, s.peakCol, s.avgCol], lastDays(d).map((i) => [d.t[i].slice(0, 10), fmt(d.peak[i]), fmt(d.avg[i])]));
     }
   }
 
   async function interties() {
+    const s = L();
     const hourly = state.days && state.days <= HOURLY_MAX_DAYS;
     const f = slice(await load(hourly ? 'interties_hourly' : 'interties_daily'), state.days);
-    const means = NEIGHBOURS.map(([k, l]) => [l, mean(f[`${k}_flow`])]);
-    const top = means.slice().sort((a, b) => Math.abs(b[1] || 0) - Math.abs(a[1] || 0))[0];
+    const names = NEIGHBOUR_KEYS.map((k) => s.neighbours[k]);
+    const top = NEIGHBOUR_KEYS.map((k, i) => [names[i], mean(f[`${k}_flow`])])
+      .sort((a, b) => Math.abs(b[1] || 0) - Math.abs(a[1] || 0))[0];
     const out = await load('adequacy_outlook');
     const minI = out.excess_capacity.reduce((b, v, i) => (v != null && (b < 0 || v < out.excess_capacity[b]) ? i : b), -1);
     const net = mean(f.total_flow);
     tiles('#interties-tiles', [
-      ['Flujo neto total', mw(net), `${net >= 0 ? 'exportación' : 'importación'} neta promedio, ${rangeLabel()}`],
-      ['Mayor intercambio', top ? top[0] : '—', top ? `${mw(top[1])} promedio (${top[1] >= 0 ? 'exporta' : 'importa'})` : ''],
-      ['Margen mínimo, próximos 7 días', minI >= 0 ? mw(out.excess_capacity[minI]) : '—', minI >= 0 ? `${out.t[minI].slice(0, 10)}, ${out.t[minI].slice(11)} EST` : ''],
+      [s.netFlow, mw(net), s.netHint(net >= 0, rangeLabel())],
+      [s.topTrade, top ? top[0] : '—', top ? s.topHint(mw(top[1]), top[1] >= 0) : ''],
+      [s.minMargin, minI >= 0 ? mw(out.excess_capacity[minI]) : '—', minI >= 0 ? stamp(out.t[minI]) : ''],
     ]);
-    $('#interties-note').textContent = `MW, ${hourly ? 'por hora' : 'promedio diario'}. Positivo: Ontario exporta; negativo: importa`;
-    draw('chart-interties', NEIGHBOURS.map(([k, l], i) => line(f.t, f[`${k}_flow`], l, css(`--s${i + 1}`))), layout({}, hourly));
-    $('#adequacy-note').textContent = `MW por hora. Capacidad de suministro pronosticada frente a lo requerido (demanda, reservas y exportaciones). Pronóstico de IESO del ${out.created_at ? out.created_at.replace('T', ' ').slice(0, 16) : '—'}`;
-    draw('chart-adequacy', [line(out.t, out.supply_capacity, 'Capacidad de suministro', css('--s1')), line(out.t, out.requirement, 'Requerido', css('--s2'))], layout({}, true));
+    $('#interties-note').textContent = s.intertiesNote(hourly ? s.hourly : s.dailyAvg);
+    draw('chart-interties', NEIGHBOUR_KEYS.map((k, i) => line(f.t, f[`${k}_flow`], names[i], css(`--s${i + 1}`))), layout({}, hourly));
+    $('#adequacy-note').textContent = s.adequacyNote(out.created_at ? out.created_at.replace('T', ' ').slice(0, 16) : '—');
+    draw('chart-adequacy', [line(out.t, out.supply_capacity, s.supply, css('--s1')), line(out.t, out.requirement, s.required, css('--s2'))], layout({}, true));
     const fd = hourly ? dailyMean(f) : f;
-    table('#interties-table', ['Día', ...NEIGHBOURS.map(([, l]) => l), 'Total'],
-      lastDays(fd).map((i) => [fd.t[i].slice(0, 10), ...NEIGHBOURS.map(([k]) => fmt(fd[`${k}_flow`][i])), fmt(fd.total_flow[i])]));
+    table('#interties-table', [s.day, ...names, s.total],
+      lastDays(fd).map((i) => [fd.t[i].slice(0, 10), ...NEIGHBOUR_KEYS.map((k) => fmt(fd[`${k}_flow`][i])), fmt(fd.total_flow[i])]));
   }
 
   const VIEWS = { prices, generation, demand, interties };
 
   // --- wiring ------------------------------------------------------------------------------
+  let meta = null;
   function matchesDark() {
     const t = document.documentElement.dataset.theme;
     return t ? t === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
   }
   async function render() {
-    document.querySelectorAll('.view').forEach((s) => (s.hidden = s.id !== `view-${state.view}`));
+    applyStrings();
+    if (meta) $('#updated').textContent = L().updated(meta.built_at, meta.prices_last_rt);
+    document.querySelectorAll('.view').forEach((sec) => (sec.hidden = sec.id !== `view-${state.view}`));
     document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === state.view)));
     document.querySelectorAll('#range button').forEach((b) => b.classList.toggle('on', Number(b.dataset.days) === state.days));
     $('#zone-wrap').hidden = state.view !== 'prices';
+    document.querySelectorAll('.load-error').forEach((el) => el.remove());
     try {
       await VIEWS[state.view]();
     } catch (e) {
       console.error(e);
-      $(`#view-${state.view}`).insertAdjacentHTML('afterbegin', '<p class="card">No se pudieron cargar los datos. Prueba recargar la página.</p>');
+      $(`#view-${state.view}`).insertAdjacentHTML('afterbegin', `<p class="card load-error">${L().error}</p>`);
     }
   }
   function save() {
@@ -222,14 +330,16 @@
 
   async function init() {
     try { Object.assign(state, JSON.parse(localStorage.getItem('ontario-grid') || '{}')); } catch (e) { /* ignore */ }
+    if (!STRINGS[state.lang]) state.lang = 'en';
     try { const t = localStorage.getItem('ontario-grid-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) { /* ignore */ }
-    const meta = await load('meta');
+    applyStrings();
+    meta = await load('meta');
+    if (!meta.zones.includes(state.zone)) state.zone = meta.zones.includes('TORONTO') ? 'TORONTO' : meta.zones[0];
     $('#zone').innerHTML = meta.zones.map((z) => `<option ${z === state.zone ? 'selected' : ''}>${z}</option>`).join('');
-    if (!meta.zones.includes(state.zone)) state.zone = meta.zones[0];
-    $('#updated').textContent = `Actualizado ${meta.built_at} · real-time hasta ${meta.prices_last_rt} EST`;
     document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => { state.view = b.dataset.view; save(); render(); }));
     document.querySelectorAll('#range button').forEach((b) => b.addEventListener('click', () => { state.days = Number(b.dataset.days); save(); render(); }));
     $('#zone').addEventListener('change', (e) => { state.zone = e.target.value; save(); render(); });
+    $('#lang').addEventListener('click', () => { state.lang = state.lang === 'en' ? 'es' : 'en'; save(); render(); });
     $('#theme').addEventListener('click', () => {
       const next = matchesDark() ? 'light' : 'dark';
       document.documentElement.dataset.theme = next;

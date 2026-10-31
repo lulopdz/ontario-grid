@@ -1,43 +1,43 @@
 # Ontario Grid
 
-El mercado eléctrico de Ontario con los datos públicos de IESO: precios day-ahead y real-time de
-las nueve zonas virtuales y su diferencia (DART), generación por fuente, demanda real contra el
-pronóstico, interconexiones con los vecinos y la adecuación de la próxima semana.
+Ontario's electricity market from IESO's public data: day-ahead and real-time prices for the nine
+virtual zonal hubs and their spread (DART), generation by fuel, actual demand against the
+forecast, interties with the neighbours, and next week's adequacy.
 
-**Sitio:** https://lulopdz.github.io/ontario-grid/
+**Site:** https://lulopdz.github.io/ontario-grid/ (English; Spanish behind the EN/ES button)
 
-Proyecto independiente, sin afiliación con IESO.
+Independent project, not affiliated with IESO.
 
-## Cómo funciona
+## How it works
 
-Todo sale de los reportes públicos de IESO (https://reports-public.ieso.ca/public/): sin API
-keys ni cupos. Una GitHub Action (`.github/workflows/update.yml`) corre cada hora:
+Everything comes from IESO's public reports (https://reports-public.ieso.ca/public/): no API keys,
+no quotas. A GitHub Action (`.github/workflows/update.yml`) runs every hour:
 
-1. `ingest/update.py` trae lo nuevo y vuelve a pedir lo que falte de los últimos 7 días, así un
-   reporte que IESO publicó tarde se completa en la corrida siguiente.
-2. Los CSV de `data/` se commitean si cambiaron.
-3. `build.py` arma el sitio en `_site/` (un JSON compacto por vista, los CSV para descargar y
-   plotly.js) y se publica en GitHub Pages.
+1. `ingest/update.py` fetches what's new and re-requests anything missing from the last 7 days,
+   so a report IESO published late is filled in on the next run.
+2. The CSVs in `data/` are committed if they changed.
+3. `build.py` builds the site into `_site/` (one compact JSON per view, the CSVs for download,
+   and plotly.js) and it is published to GitHub Pages.
 
-| Archivo | Contenido | Desde |
+| File | Contents | Since |
 |---|---|---|
-| `data/prices.csv` | Precio day-ahead y real-time (promedio de los 12 intervalos de 5 min) por zona, $/MWh | 2025-05-20 |
-| `data/generation.csv` | Generación por fuente, MW | 2018 |
-| `data/demand.csv` | Demanda de Ontario y de mercado (con exportaciones), MW | 2018 |
-| `data/interties.csv` | Importación y exportación programadas y flujo real por vecino, MW (flujo > 0: Ontario exporta) | 2018 |
-| `data/adequacy.csv` | Pronóstico de demanda, capacidad de suministro, requerido y margen: el último pronóstico publicado antes de empezar cada día | 2026-09-17 |
-| `data/adequacy_outlook.csv` | Lo mismo para hoy y los 6 días siguientes, según el pronóstico más reciente | — |
+| `data/prices.csv` | Day-ahead and real-time (mean of the twelve 5-minute intervals) price by zone, $/MWh | 2025-05-20 |
+| `data/generation.csv` | Generation by fuel, MW | 2018 |
+| `data/demand.csv` | Ontario demand and market demand (with exports), MW | 2018 |
+| `data/interties.csv` | Scheduled imports and exports and actual flow by neighbour, MW (flow > 0: Ontario exports) | 2018 |
+| `data/adequacy.csv` | Demand forecast, supply capacity, requirement and margin: the last forecast published before each day began | 2026-09-17 |
+| `data/adequacy_outlook.csv` | The same for today and the next six days, from the latest forecast | — |
 
-Todas las horas van en hora de mercado de IESO: EST todo el año, sin horario de verano; `he` es
-la hora que termina (1-24).
+All times are IESO market time: Eastern Standard Time all year, no daylight saving; `he` is the
+hour ending (1-24).
 
-IESO mantiene en línea unos 3 meses de reportes diarios (precios, adecuación). La historia de
-precios anterior viene de [lrg-dashboard](https://github.com/lulopdz/lrg-dashboard) (GridStatus,
-verificada contra estos mismos reportes). Generación, demanda e interconexiones tienen archivos
-anuales, así que su historia completa siempre se puede reconstruir:
+IESO keeps about three months of its daily reports online (prices, adequacy). Earlier price
+history comes from [lrg-dashboard](https://github.com/lulopdz/lrg-dashboard) (GridStatus, checked
+against these same reports). Generation, demand and interties have yearly files, so their full
+history can always be rebuilt:
 
 ```bash
 pip install -r requirements.txt
-python ingest/update.py --window 100 --full-years   # todo lo que IESO todavía tiene
-python build.py                                     # sitio en _site/
+python ingest/update.py --window 100 --full-years   # everything IESO still keeps
+python build.py                                     # site in _site/
 ```

@@ -19,12 +19,15 @@ no quotas. A GitHub Action (`.github/workflows/update.yml`) runs every hour:
 3. `build.py` builds the site into `_site/` (one compact JSON per view, the CSVs for download,
    and plotly.js) and it is published to GitHub Pages.
 
+The four big hourly series are one CSV per year (`data/prices/2026.csv`, ...), so each hourly
+commit rewrites only the current year; the site's download links offer each one whole.
+
 | File | Contents | Since |
 |---|---|---|
-| `data/prices.csv` | Day-ahead and real-time (mean of the twelve 5-minute intervals) price by zone, $/MWh | 2025-05-20 |
-| `data/generation.csv` | Generation by fuel, MW | 2018 |
-| `data/demand.csv` | Ontario demand and market demand (with exports), MW | 2018 |
-| `data/interties.csv` | Scheduled imports and exports and actual flow by neighbour, MW (flow > 0: Ontario exports) | 2018 |
+| `data/prices/` | Day-ahead and real-time (mean of the twelve 5-minute intervals) price by zone, $/MWh | 2025-05-20 |
+| `data/generation/` | Generation by fuel, MW | 2018 |
+| `data/demand/` | Ontario demand and market demand (with exports), MW | 2018 |
+| `data/interties/` | Scheduled imports and exports and actual flow by neighbour, MW (flow > 0: Ontario exports) | 2018 |
 | `data/adequacy.csv` | Demand forecast, supply capacity, requirement and margin: the last forecast published before each day began | 2026-09-17 |
 | `data/adequacy_outlook.csv` | The same for today and the next six days, from the latest forecast | — |
 

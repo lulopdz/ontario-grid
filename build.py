@@ -17,12 +17,18 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent
 DATA, SITE, OUT = ROOT / "data", ROOT / "site", ROOT / "_site"
 HOURLY_DAYS = 120
+YEARLY = ("prices.csv", "generation.csv", "demand.csv", "interties.csv")  # data/<name>/YYYY.csv (see ingest/update.py)
 FUELS = ["nuclear", "gas", "hydro", "wind", "solar", "biofuel"]
 NEIGHBOURS = ["quebec", "new_york", "michigan", "minnesota", "manitoba"]
 
 
 def read(name):
-    df = pd.read_csv(DATA / name)
+    """A dataset as one frame: data/<name>.csv, or every year of data/<name>/YYYY.csv joined."""
+    folder = DATA / name.removesuffix(".csv")
+    if folder.is_dir():
+        df = pd.concat(pd.read_csv(f) for f in sorted(folder.glob("[0-9][0-9][0-9][0-9].csv")))
+    else:
+        df = pd.read_csv(DATA / name)
     df["t"] = pd.to_datetime(df["date"]) + pd.to_timedelta(df["he"] - 1, unit="h")
     return df
 
@@ -57,6 +63,8 @@ def build():
     (OUT / "download").mkdir()
     for csv in DATA.glob("*.csv"):
         shutil.copy(csv, OUT / "download" / csv.name)
+    for name in YEARLY:  # kept one file per year in data/, offered whole
+        read(name).drop(columns="t").to_csv(OUT / "download" / name, index=False)
     import plotly
     (OUT / "vendor").mkdir()
     shutil.copy(Path(plotly.__file__).parent / "package_data" / "plotly.min.js", OUT / "vendor" / "plotly.min.js")

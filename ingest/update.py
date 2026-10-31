@@ -9,10 +9,10 @@ stored hour, so an hour IESO published late (or a run that failed halfway) is fi
 next pass rather than left as a permanent hole -- lrg-dashboard lost 2026-10-23 HE12 that way.
 
 Files (all keyed by date + he, IESO market time = EST all year):
-  prices.csv            date, he, zone, da, rt          nine virtual zonal hubs
-  generation.csv        date, he, nuclear .. biofuel     MW by fuel
-  demand.csv            date, he, ontario_demand, market_demand
-  interties.csv         date, he, {neighbour}_import/_export/_flow
+  prices/YYYY.csv       date, he, zone, da, rt          nine virtual zonal hubs
+  generation/YYYY.csv   date, he, nuclear .. biofuel     MW by fuel
+  demand/YYYY.csv       date, he, ontario_demand, market_demand
+  interties/YYYY.csv    date, he, {neighbour}_import/_export/_flow
   adequacy.csv          date, he, forecast_demand, supply_capacity, requirement, excess_capacity,
                         created_at -- the last forecast published before the day began
   adequacy_outlook.csv  same columns, the latest forecast for today and the next six days
@@ -44,14 +44,31 @@ WINDOW_DAYS = 7
 FIRST_YEAR = 2018  # interties start here; generation and demand are trimmed to match
 
 
+# The four big hourly series live as one file per year (data/prices/2026.csv, ...): every run
+# rewrites only the current year's file, so past years stay untouched in git instead of being
+# re-committed whole every hour. load() and save() hide the split; build.py joins the years.
+YEARLY = ("prices.csv", "generation.csv", "demand.csv", "interties.csv")
+
+
 def load(name):
+    if name in YEARLY:
+        files = sorted((DATA / name.removesuffix(".csv")).glob("*.csv"))
+        return pd.concat(pd.read_csv(f) for f in files) if files else None
     path = DATA / name
     return pd.read_csv(path) if path.exists() else None
 
 
 def save(df, name, keys):
     df = df.drop_duplicates(subset=keys, keep="last").sort_values(keys)
-    df.to_csv(DATA / name, index=False)
+    if name in YEARLY:
+        folder = DATA / name.removesuffix(".csv")
+        folder.mkdir(exist_ok=True)
+        for year, part in df.groupby(df["date"].str[:4]):
+            path, text = folder / f"{year}.csv", part.to_csv(index=False)
+            if not path.exists() or path.read_text() != text:  # leave unchanged years alone
+                path.write_text(text)
+    else:
+        df.to_csv(DATA / name, index=False)
     print(f"  {name}: {len(df):,} rows, {df['date'].min()} .. {df['date'].max()}")
 
 
@@ -292,7 +309,7 @@ def main():
     if "prices" in only:
         update_prices(args.window)
     if "yearly" in only:
-        update_yearly(args.full_years or not (DATA / "generation.csv").exists())
+        update_yearly(args.full_years or load("generation.csv") is None)
     if "adequacy" in only:
         update_adequacy(args.window)
     if "market" in only:

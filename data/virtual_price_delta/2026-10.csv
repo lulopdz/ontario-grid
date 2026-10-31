@@ -1,4 +1,211 @@
 date,zone,price_delta
+2026-10-01,East,76.93
+2026-10-01,Essa,85.02
+2026-10-01,Niagara,73.98
+2026-10-01,Northeast,83.99
+2026-10-01,Northwest,85.2
+2026-10-01,Ottawa,83.07
+2026-10-01,Southwest (Bruce + Southwest),79.59
+2026-10-01,Toronto,79.67
+2026-10-01,West,76.26
+2026-10-02,East,76.93
+2026-10-02,Essa,85.02
+2026-10-02,Niagara,73.98
+2026-10-02,Northeast,83.99
+2026-10-02,Northwest,85.2
+2026-10-02,Ottawa,83.07
+2026-10-02,Southwest (Bruce + Southwest),79.59
+2026-10-02,Toronto,79.67
+2026-10-02,West,76.26
+2026-10-03,East,76.93
+2026-10-03,Essa,85.02
+2026-10-03,Niagara,73.98
+2026-10-03,Northeast,83.99
+2026-10-03,Northwest,85.2
+2026-10-03,Ottawa,83.07
+2026-10-03,Southwest (Bruce + Southwest),79.59
+2026-10-03,Toronto,79.67
+2026-10-03,West,76.26
+2026-10-04,East,76.93
+2026-10-04,Essa,85.02
+2026-10-04,Niagara,73.98
+2026-10-04,Northeast,83.99
+2026-10-04,Northwest,85.2
+2026-10-04,Ottawa,83.07
+2026-10-04,Southwest (Bruce + Southwest),79.59
+2026-10-04,Toronto,79.67
+2026-10-04,West,76.26
+2026-10-05,East,76.93
+2026-10-05,Essa,85.02
+2026-10-05,Niagara,73.98
+2026-10-05,Northeast,83.99
+2026-10-05,Northwest,85.2
+2026-10-05,Ottawa,83.07
+2026-10-05,Southwest (Bruce + Southwest),79.59
+2026-10-05,Toronto,79.67
+2026-10-05,West,76.26
+2026-10-06,East,76.93
+2026-10-06,Essa,85.02
+2026-10-06,Niagara,73.98
+2026-10-06,Northeast,83.99
+2026-10-06,Northwest,85.2
+2026-10-06,Ottawa,83.07
+2026-10-06,Southwest (Bruce + Southwest),79.59
+2026-10-06,Toronto,79.67
+2026-10-06,West,76.26
+2026-10-07,East,76.93
+2026-10-07,Essa,85.02
+2026-10-07,Niagara,73.98
+2026-10-07,Northeast,83.99
+2026-10-07,Northwest,85.2
+2026-10-07,Ottawa,83.07
+2026-10-07,Southwest (Bruce + Southwest),79.59
+2026-10-07,Toronto,79.67
+2026-10-07,West,76.26
+2026-10-08,East,76.93
+2026-10-08,Essa,85.02
+2026-10-08,Niagara,73.98
+2026-10-08,Northeast,83.99
+2026-10-08,Northwest,85.2
+2026-10-08,Ottawa,83.07
+2026-10-08,Southwest (Bruce + Southwest),79.59
+2026-10-08,Toronto,79.67
+2026-10-08,West,76.26
+2026-10-09,East,76.93
+2026-10-09,Essa,85.02
+2026-10-09,Niagara,73.98
+2026-10-09,Northeast,83.99
+2026-10-09,Northwest,85.2
+2026-10-09,Ottawa,83.07
+2026-10-09,Southwest (Bruce + Southwest),79.59
+2026-10-09,Toronto,79.67
+2026-10-09,West,76.26
+2026-10-10,East,76.93
+2026-10-10,Essa,85.02
+2026-10-10,Niagara,73.98
+2026-10-10,Northeast,83.99
+2026-10-10,Northwest,85.2
+2026-10-10,Ottawa,83.07
+2026-10-10,Southwest (Bruce + Southwest),79.59
+2026-10-10,Toronto,79.67
+2026-10-10,West,76.26
+2026-10-11,East,76.93
+2026-10-11,Essa,85.02
+2026-10-11,Niagara,73.98
+2026-10-11,Northeast,83.99
+2026-10-11,Northwest,100.55
+2026-10-11,Ottawa,101.3
+2026-10-11,Southwest (Bruce + Southwest),79.59
+2026-10-11,Toronto,79.67
+2026-10-11,West,76.26
+2026-10-12,East,76.93
+2026-10-12,Essa,85.02
+2026-10-12,Niagara,73.98
+2026-10-12,Northeast,99.17
+2026-10-12,Northwest,100.55
+2026-10-12,Ottawa,101.3
+2026-10-12,Southwest (Bruce + Southwest),79.59
+2026-10-12,Toronto,79.67
+2026-10-12,West,76.26
+2026-10-13,East,94.41
+2026-10-13,Essa,85.02
+2026-10-13,Niagara,73.98
+2026-10-13,Northeast,99.17
+2026-10-13,Northwest,100.55
+2026-10-13,Ottawa,101.3
+2026-10-13,Southwest (Bruce + Southwest),79.59
+2026-10-13,Toronto,79.67
+2026-10-13,West,76.26
+2026-10-14,East,94.41
+2026-10-14,Essa,85.02
+2026-10-14,Niagara,73.98
+2026-10-14,Northeast,99.17
+2026-10-14,Northwest,100.55
+2026-10-14,Ottawa,101.3
+2026-10-14,Southwest (Bruce + Southwest),79.59
+2026-10-14,Toronto,93.91
+2026-10-14,West,76.26
+2026-10-15,East,94.41
+2026-10-15,Essa,100.39
+2026-10-15,Niagara,73.98
+2026-10-15,Northeast,99.17
+2026-10-15,Northwest,100.55
+2026-10-15,Ottawa,101.3
+2026-10-15,Southwest (Bruce + Southwest),79.59
+2026-10-15,Toronto,93.91
+2026-10-15,West,76.26
+2026-10-16,East,94.41
+2026-10-16,Essa,100.39
+2026-10-16,Niagara,73.98
+2026-10-16,Northeast,99.17
+2026-10-16,Northwest,100.55
+2026-10-16,Ottawa,101.3
+2026-10-16,Southwest (Bruce + Southwest),79.59
+2026-10-16,Toronto,93.91
+2026-10-16,West,76.26
+2026-10-17,East,94.41
+2026-10-17,Essa,100.39
+2026-10-17,Niagara,73.98
+2026-10-17,Northeast,99.17
+2026-10-17,Northwest,100.55
+2026-10-17,Ottawa,101.3
+2026-10-17,Southwest (Bruce + Southwest),79.59
+2026-10-17,Toronto,93.91
+2026-10-17,West,76.26
+2026-10-18,East,94.41
+2026-10-18,Essa,100.39
+2026-10-18,Niagara,73.98
+2026-10-18,Northeast,99.17
+2026-10-18,Northwest,100.55
+2026-10-18,Ottawa,101.3
+2026-10-18,Southwest (Bruce + Southwest),79.59
+2026-10-18,Toronto,93.91
+2026-10-18,West,76.26
+2026-10-19,East,94.41
+2026-10-19,Essa,100.39
+2026-10-19,Niagara,73.98
+2026-10-19,Northeast,99.17
+2026-10-19,Northwest,100.55
+2026-10-19,Ottawa,101.3
+2026-10-19,Southwest (Bruce + Southwest),79.59
+2026-10-19,Toronto,93.91
+2026-10-19,West,76.26
+2026-10-20,East,94.41
+2026-10-20,Essa,100.39
+2026-10-20,Niagara,73.98
+2026-10-20,Northeast,99.17
+2026-10-20,Northwest,100.55
+2026-10-20,Ottawa,101.3
+2026-10-20,Southwest (Bruce + Southwest),79.59
+2026-10-20,Toronto,93.91
+2026-10-20,West,76.26
+2026-10-21,East,94.41
+2026-10-21,Essa,100.39
+2026-10-21,Niagara,73.98
+2026-10-21,Northeast,99.17
+2026-10-21,Northwest,100.55
+2026-10-21,Ottawa,101.3
+2026-10-21,Southwest (Bruce + Southwest),79.59
+2026-10-21,Toronto,93.91
+2026-10-21,West,76.26
+2026-10-22,East,94.41
+2026-10-22,Essa,100.39
+2026-10-22,Niagara,73.98
+2026-10-22,Northeast,99.17
+2026-10-22,Northwest,100.55
+2026-10-22,Ottawa,101.3
+2026-10-22,Southwest (Bruce + Southwest),79.59
+2026-10-22,Toronto,93.91
+2026-10-22,West,76.26
+2026-10-23,East,94.41
+2026-10-23,Essa,100.39
+2026-10-23,Niagara,73.98
+2026-10-23,Northeast,99.17
+2026-10-23,Northwest,100.55
+2026-10-23,Ottawa,101.3
+2026-10-23,Southwest (Bruce + Southwest),79.59
+2026-10-23,Toronto,93.91
+2026-10-23,West,76.26
 2026-10-24,East,94.41
 2026-10-24,Essa,100.39
 2026-10-24,Niagara,73.98

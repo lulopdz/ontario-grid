@@ -28,6 +28,23 @@ no quotas. A GitHub Action (`.github/workflows/update.yml`) runs every hour:
 | `data/adequacy.csv` | Demand forecast, supply capacity, requirement and margin: the last forecast published before each day began | 2026-09-17 |
 | `data/adequacy_outlook.csv` | The same for today and the next six days, from the latest forecast | — |
 
+### Market detail
+
+IESO keeps these reports online for only ~30 days (generator output and intertie prices ~90),
+so this archive is the only place their history builds up: it starts with what IESO still had
+when it began (late October 2026). One CSV per month in
+`data/<name>/YYYY-MM.csv`, hourly:
+
+| Folder | Contents |
+|---|---|
+| `virtual_transactions/` | Day-ahead virtual bids and offers by zone: load bid, supply offered, and what each scheduled, MW |
+| `virtual_price_delta/` | IESO's daily virtual transaction price delta by zone, $/MWh |
+| `vg_forecast/` | Wind and solar forecast by zone, grid-connected and embedded: the last one published before each day began, MW |
+| `shadow_prices_da/`, `shadow_prices_rt/` | Shadow price of each binding transmission constraint (real-time: hourly mean of the 5-minute values), $/MWh |
+| `intertie_lmp/` | Day-ahead and real-time LMP at the 18 intertie points, $/MWh |
+| `generator_output/` | Output, capability and available capacity of every grid-connected generator, MW |
+| `transmission_outages.csv` | Transmission outages (today's and the 30-day planned list), with when each was first and last seen |
+
 All times are IESO market time: Eastern Standard Time all year, no daylight saving; `he` is the
 hour ending (1-24).
 

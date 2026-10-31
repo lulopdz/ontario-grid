@@ -15,7 +15,21 @@ Files (all keyed by date + he, IESO market time = EST all year):
   interties.csv         date, he, {neighbour}_import/_export/_flow
   adequacy.csv          date, he, forecast_demand, supply_capacity, requirement, excess_capacity,
                         created_at -- the last forecast published before the day began
-  adequacy_outlook.csv  same columns, the latest forecast for today and the next six days"""
+  adequacy_outlook.csv  same columns, the latest forecast for today and the next six days
+
+Market detail, one file per month (data/<name>/YYYY-MM.csv) so an hourly commit only touches
+the current month. IESO keeps these ~30 days (some ~90), so they only exist from when this
+archive started:
+  virtual_transactions/   date, he, zone, load_bid, load_scheduled, supply_offered, supply_scheduled, net_scheduled
+  virtual_price_delta/    date, zone, price_delta
+  vg_forecast/            date, he, organization, fuel, zone, mw, forecast_at -- the last wind/solar
+                          forecast published before the day began
+  shadow_prices_da/       date, he, constraint, shadow_price, run
+  shadow_prices_rt/       date, he, constraint, shadow_price (mean of the 5-minute intervals)
+  intertie_lmp/           date, he, point, da, rt
+  generator_output/       date, he, generator, fuel, output, capability, available_capacity
+  transmission_outages.csv  one row per outage request and equipment, with when it was first
+                          and last seen (first_seen before planned_start = known ahead)"""
 import argparse
 import sys
 from pathlib import Path
@@ -50,6 +64,42 @@ def merge(name, new, keys):
 
 def days(start, end):
     return list(pd.date_range(start, end).date)
+
+
+# --- monthly files ---------------------------------------------------------------------------
+
+def load_monthly(name, since):
+    """Rows of data/<name>/ from the month of `since` on (None if nothing stored)."""
+    folder = DATA / name
+    files = sorted(folder.glob("*.csv")) if folder.exists() else []
+    frames = [pd.read_csv(f) for f in files if f.stem >= f"{since:%Y-%m}"]
+    return pd.concat(frames) if frames else None
+
+
+def save_monthly(name, new, keys):
+    if new is None or new.empty:
+        return
+    folder = DATA / name
+    folder.mkdir(exist_ok=True)
+    for month, part in new.groupby(new["date"].str[:7]):
+        path = folder / f"{month}.csv"
+        if path.exists():
+            part = pd.concat([pd.read_csv(path), part])
+        part = part.drop_duplicates(subset=keys, keep="last").sort_values(keys)
+        part.to_csv(path, index=False)
+    print(f"  {name}/: +{len(new):,} rows ({new['date'].min()} .. {new['date'].max()})")
+
+
+def missing_days(name, candidates):
+    have = load_monthly(name, min(candidates)) if candidates else None
+    have = set() if have is None else set(have["date"])
+    return [d for d in candidates if f"{d:%Y-%m-%d}" not in have]
+
+
+def fetch_days(name, candidates, reader, keys):
+    frames = [df for df in (reader(d) for d in missing_days(name, candidates)) if df is not None and not df.empty]
+    save_monthly(name, pd.concat(frames) if frames else None, keys)
+    return len(frames)
 
 
 # --- prices ----------------------------------------------------------------------------------
@@ -152,15 +202,91 @@ def update_adequacy(window):
         save(pd.concat(outlook), "adequacy_outlook.csv", ["date", "he"])
 
 
+# --- market detail ---------------------------------------------------------------------------
+
+def update_market(window):
+    now = ieso.market_now()
+    today = now.date()
+    start = today - pd.Timedelta(days=window)
+    tomorrow = today + pd.Timedelta(days=1)
+    counts = {}
+
+    # Published with the DAM (~12:35 EST the day before), so tomorrow may be out already.
+    counts["virtual_transactions"] = fetch_days("virtual_transactions", days(start, tomorrow), ieso.virtual_transactions, ["date", "he", "zone"])
+    counts["virtual_price_delta"] = fetch_days("virtual_price_delta", days(start, tomorrow), ieso.virtual_price_delta, ["date", "zone"])
+    counts["shadow_prices_da"] = fetch_days("shadow_prices_da", days(start, tomorrow), lambda d: ieso.shadow_prices(d, "da"),
+                                            ["date", "he", "constraint", "run"])
+    # Real-time shadow prices come out about six days late; the window has to reach them.
+    rt_start = today - pd.Timedelta(days=max(window, 10))
+    counts["shadow_prices_rt"] = fetch_days("shadow_prices_rt", days(rt_start, today), lambda d: ieso.shadow_prices(d, "rt"),
+                                            ["date", "he", "constraint"])
+    # A day's generator file is final once the day is over.
+    counts["generator_output"] = fetch_days("generator_output", days(start, today - pd.Timedelta(days=1)), ieso.generator_output,
+                                            ["date", "he", "generator"])
+
+    # Wind/solar: for day T, the last forecast of T-1 (its file covers T and T+1).
+    def vg(day):
+        df = ieso.vg_forecast(day - pd.Timedelta(days=1))
+        return None if df is None else df[df["date"] == f"{day:%Y-%m-%d}"]
+    counts["vg_forecast"] = fetch_days("vg_forecast", days(start, today), vg, ["date", "he", "organization", "fuel", "zone"])
+
+    # Intertie LMPs: day-ahead per day, real-time per complete hour (like the zonal prices).
+    have = load_monthly("intertie_lmp", start)
+    have_da = set() if have is None else set(have.loc[have["da"].notna(), "date"])
+    have_rt = set() if have is None else set(zip(have.loc[have["rt"].notna(), "date"], have.loc[have["rt"].notna(), "he"]))
+    frames = [ieso.intertie_lmp_da(d) for d in days(start, tomorrow) if f"{d:%Y-%m-%d}" not in have_da]
+    for d in days(start, today):
+        for he in range(1, (now.hour if d == today else 24) + 1):
+            if (f"{d:%Y-%m-%d}", he) not in have_rt:
+                frames.append(ieso.intertie_lmp_rt(d, he))
+    frames = [f for f in frames if f is not None and not f.empty]
+    if frames:
+        keys = ["date", "he", "point"]
+        new = pd.concat(frames).groupby(keys).first()
+        if have is not None:
+            new = new.combine_first(have.set_index(keys))
+        new = new.reset_index().reindex(columns=[*keys, "da", "rt"])
+        save_monthly("intertie_lmp", new[new["date"] >= f"{start:%Y-%m-%d}"], keys)
+    counts["intertie_lmp"] = len(frames)
+
+    counts["transmission_outages"] = update_outages(today)
+    print("market: " + ", ".join(f"{k} {v}" for k, v in counts.items()))
+
+
+def update_outages(today):
+    """Upsert today's outages and the 30-day planned list into transmission_outages.csv,
+    keeping when each outage/equipment pair was first and last seen."""
+    keys = ["outage_id", "equipment"]
+    frames = []
+    for report, source in (("TxOutagesTodayAll", "today"), ("TxOutages1to30DaysPlanned", "planned")):
+        df = ieso.transmission_outages(f"{report}/PUB_{report}_{today:%Y%m%d}.xml")
+        if df is not None and not df.empty:
+            frames.append(df.assign(first_seen=f"{today:%Y-%m-%d}", last_seen=f"{today:%Y-%m-%d}", first_source=source))
+    if not frames:
+        return 0
+    new = pd.concat(frames).drop_duplicates(subset=keys, keep="first")
+    old = load("transmission_outages.csv")
+    if old is not None:
+        first = old.set_index(keys)[["first_seen", "first_source"]]
+        new = new.set_index(keys)
+        new.update(first)  # an outage keeps the day (and list) it first appeared in
+        new = pd.concat([old.set_index(keys), new])
+        new = new[~new.index.duplicated(keep="last")].reset_index()
+    new = new.sort_values(["first_seen", "outage_id", "equipment"])
+    new.to_csv(DATA / "transmission_outages.csv", index=False)
+    print(f"  transmission_outages.csv: {len(new):,} rows")
+    return len(frames)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--window", type=int, default=WINDOW_DAYS, help="days back to re-check for missing data")
     ap.add_argument("--full-years", action="store_true", help=f"re-read every yearly file since {FIRST_YEAR}")
     ap.add_argument("--seed-prices", default=None, help="lrg-dashboard data/ folder to start prices.csv from")
-    ap.add_argument("--only", default=None, help="comma list of prices,yearly,adequacy")
+    ap.add_argument("--only", default=None, help="comma list of prices,yearly,adequacy,market")
     args = ap.parse_args()
     DATA.mkdir(exist_ok=True)
-    only = set(args.only.split(",")) if args.only else {"prices", "yearly", "adequacy"}
+    only = set(args.only.split(",")) if args.only else {"prices", "yearly", "adequacy", "market"}
     if args.seed_prices:
         seed_prices(args.seed_prices)
     if "prices" in only:
@@ -169,6 +295,8 @@ def main():
         update_yearly(args.full_years or not (DATA / "generation.csv").exists())
     if "adequacy" in only:
         update_adequacy(args.window)
+    if "market" in only:
+        update_market(args.window)
 
 
 if __name__ == "__main__":

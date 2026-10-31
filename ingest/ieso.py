@@ -180,3 +180,186 @@ def adequacy_versions(listing_map, day):
     stem = f"PUB_Adequacy3_{day:%Y%m%d}"
     files = [(n, t) for n, t in listing_map.items() if n.startswith(stem)]
     return sorted(files, key=lambda x: x[1])
+
+
+# --- Market detail (daily files IESO keeps ~30 days; archived monthly by update.py) --------
+
+def _L(e):
+    return e.tag.split("}")[-1]
+
+
+def _xml(path):
+    body = get(f"{BASE}/{path}")
+    return None if body is None else ET.fromstring(body)
+
+
+def _children(e, name):
+    return [c for c in e if _L(c) == name]
+
+
+def _text(e, name):
+    for c in e:
+        if _L(c) == name:
+            return c.text
+    return None
+
+
+VT_TYPES = {"Total Load Bid": "load_bid", "Total Load Scheduled": "load_scheduled", "Total Supply Offered": "supply_offered",
+            "Total Supply Scheduled": "supply_scheduled", "Net Scheduled": "net_scheduled", "Total Net Scheduled": "net_scheduled"}
+
+
+def virtual_transactions(day):
+    """Day-ahead virtual transactions by zonal hub and hour (MW): date, he, zone, load_bid,
+    load_scheduled, supply_offered, supply_scheduled, net_scheduled. zone TOTAL is IESO's
+    Ontario-wide total. Published with the DAM, the day before delivery."""
+    root = _xml(f"DAVirtualTransactions/PUB_DAVirtualTransactions_{day:%Y%m%d}.xml")
+    if root is None:
+        return None
+    rows = []
+    for vt in root.iter():
+        if _L(vt) == "ZonalTransactions":
+            zone, hours, tx = _text(vt, "ZoneName").replace(":HUB", ""), "HourlyTransactions", "Transactions"
+        elif _L(vt) == "VTTotals":
+            zone, hours, tx = "TOTAL", "HourlyTotalTransactions", "TotalTransactions"
+        else:
+            continue
+        for h in _children(vt, hours):
+            row = {"date": f"{day:%Y-%m-%d}", "he": int(_text(h, "DeliveryHour")), "zone": zone}
+            for t in _children(h, tx):
+                row[VT_TYPES.get(_text(t, "Type"), _text(t, "Type"))] = float(_text(t, "Value"))
+            rows.append(row)
+    return pd.DataFrame(rows).reindex(columns=["date", "he", "zone", *dict.fromkeys(VT_TYPES.values())])
+
+
+def virtual_price_delta(day):
+    """IESO's daily virtual transaction price delta by zone ($/MWh): date, zone, price_delta."""
+    root = _xml(f"PriceDeltaVirtualTransactionDaily/PUB_PriceDeltaVirtualTransactionDaily_{day:%Y%m%d}.xml")
+    if root is None:
+        return None
+    rows = [(f"{day:%Y-%m-%d}", _text(z, "Name"), float(_text(z, "PriceDelta"))) for z in root.iter() if _L(z) == "Zone"]
+    return pd.DataFrame(rows, columns=["date", "zone", "price_delta"])
+
+
+def vg_forecast(published_day):
+    """Wind and solar forecast (MW) from the last VGForecastSummary of published_day, which
+    covers the next two days: date, he, organization (MARKET PARTICIPANT = grid-connected,
+    EMBEDDED = distribution-connected), fuel, zone, mw, forecast_at."""
+    root = _xml(f"VGForecastSummary/PUB_VGForecastSummary_{published_day:%Y%m%d}.xml")
+    if root is None:
+        return None
+    stamp = next((e.text for e in root.iter() if _L(e) == "ForecastTimeStamp"), None)
+    rows = []
+    for org in root.iter():
+        if _L(org) != "OrganizationData":
+            continue
+        org_type = _text(org, "OrganizationType")
+        for fuel in _children(org, "FuelData"):
+            for res in _children(fuel, "ResourceData"):
+                for fc in _children(res, "EnergyForecast"):
+                    for iv in _children(fc, "ForecastInterval"):
+                        rows.append((_text(fc, "ForecastDate"), int(_text(iv, "ForecastHour")), org_type,
+                                     _text(fuel, "FuelType").lower(), _text(res, "ZoneName"), float(_text(iv, "MWOutput")), stamp))
+    return pd.DataFrame(rows, columns=["date", "he", "organization", "fuel", "zone", "mw", "forecast_at"])
+
+
+def shadow_prices(day, market):
+    """Shadow price of every binding transmission constraint ($/MWh): date, he, constraint,
+    shadow_price (real-time: mean of the 5-minute intervals) and, day-ahead, run."""
+    if market == "da":
+        root = _xml(f"DAConstrShadowPrices/PUB_DAConstrShadowPrices_{day:%Y%m%d}.xml")
+    else:
+        root = _xml(f"RealtimeConstrShadowPrices/PUB_RealtimeConstrShadowPrices_{day:%Y%m%d}.xml")
+    if root is None:
+        return None
+    rows = []
+    for hp in root.iter():
+        if _L(hp) != "HourlyPrice":
+            continue
+        name = " ".join((_text(hp, "ConstraintName") or "").split())
+        if market == "da":
+            sp = _children(hp, "ShadowPrices")[0] if _children(hp, "ShadowPrices") else hp
+            hours = [c for c in sp if _L(c) == "Hour"]
+            prices = [c for c in sp if _L(c) == "ShadowPrice"]
+            for h, p in zip(hours, prices):
+                rows.append((f"{day:%Y-%m-%d}", int(h.text), name, float(p.text), int(_text(hp, "RunNo") or 1)))
+        else:
+            vals = [float(_text(iv, "ShadowPrice")) for iv in _children(hp, "IntervalShadowPrices")]
+            if vals:
+                rows.append((f"{day:%Y-%m-%d}", int(_text(hp, "DeliveryHour")), name, sum(vals) / len(vals), None))
+    df = pd.DataFrame(rows, columns=["date", "he", "constraint", "shadow_price", "run"])
+    return df if market == "da" else df.drop(columns="run")
+
+
+def _intertie_points(root, hourly_tag, value_tag, he=None, day=None):
+    rows = []
+    for p in root.iter():
+        if _L(p) != "IntertieLMPrice":
+            continue
+        point = _text(p, "IntertiePLName").replace(":LMP", "")
+        for comp in _children(p, "Components"):
+            if _text(comp, "LMPComponent") != "Intertie LMP":
+                continue
+            items = _children(comp, hourly_tag)
+            if he is None:
+                rows += [(day, int(_text(i, "DeliveryHour")), point, float(_text(i, value_tag))) for i in items]
+            elif items:
+                rows.append((day, he, point, sum(float(_text(i, value_tag)) for i in items) / len(items)))
+    return rows
+
+
+def intertie_lmp_da(day):
+    """Day-ahead LMP at each intertie point ($/MWh): date, he, point, da."""
+    root = _xml(f"DAHourlyIntertieLMP/PUB_DAHourlyIntertieLMP_{day:%Y%m%d}.xml")
+    if root is None:
+        return None
+    return pd.DataFrame(_intertie_points(root, "HourlyLMP", "LMP", day=f"{day:%Y-%m-%d}"), columns=["date", "he", "point", "da"])
+
+
+def intertie_lmp_rt(day, he):
+    """Real-time LMP at each intertie point for one hour, mean of its 5-minute intervals."""
+    root = _xml(f"RealTimeIntertieLMP/PUB_RealTimeIntertieLMP_{day:%Y%m%d}{he:02d}.xml")
+    if root is None:
+        return None
+    return pd.DataFrame(_intertie_points(root, "IntervalLMP", "LMP", he=he, day=f"{day:%Y-%m-%d}"), columns=["date", "he", "point", "rt"])
+
+
+def generator_output(day):
+    """Hourly output, capability and available capacity (MW) of every grid-connected
+    generator: date, he, generator, fuel, output, capability, available_capacity. The day's
+    final version is published shortly after midnight."""
+    root = _xml(f"GenOutputCapability/PUB_GenOutputCapability_{day:%Y%m%d}.xml")
+    if root is None:
+        return None
+    parts = {"Outputs": "output", "Capabilities": "capability", "Capacities": "available_capacity"}
+    rows = []
+    for g in root.iter():
+        if _L(g) != "Generator":
+            continue
+        name, fuel, hours = _text(g, "GeneratorName"), _text(g, "FuelType"), {}
+        for part, col in parts.items():
+            for block in _children(g, part):
+                for item in block:
+                    h, v = _text(item, "Hour"), _text(item, "EnergyMW")
+                    if h:
+                        hours.setdefault(int(h), {})[col] = float(v) if v not in (None, "") else None
+        rows += [{"date": f"{day:%Y-%m-%d}", "he": h, "generator": name, "fuel": (fuel or "").lower(), **v} for h, v in hours.items()]
+    return pd.DataFrame(rows).reindex(columns=["date", "he", "generator", "fuel", *parts.values()])
+
+
+def transmission_outages(name):
+    """One TxOutages report (TxOutagesTodayAll or TxOutages1to30DaysPlanned): one row per
+    outage request and equipment."""
+    root = _xml(name)
+    if root is None:
+        return None
+    rows = []
+    for req in root.iter():
+        if _L(req) != "OutageRequest":
+            continue
+        base = {"outage_id": _text(req, "OutageID"), "planned_start": _text(req, "PlannedStart"), "planned_end": _text(req, "PlannedEnd"),
+                "priority": _text(req, "Priority"), "recurrence": _text(req, "Recurrence"),
+                "recall_time": _text(req, "EquipmentRecallTime"), "status": _text(req, "OutageRequestStatus")}
+        for eq in _children(req, "EquipmentRequested"):
+            rows.append({**base, "equipment": _text(eq, "EquipmentName"), "equipment_type": _text(eq, "EquipmentType"),
+                         "voltage": _text(eq, "EquipmentVoltage"), "constraint_type": _text(eq, "ConstraintType")})
+    return pd.DataFrame(rows)

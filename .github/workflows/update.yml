@@ -1,8 +1,8 @@
-name: Actualizar y publicar
+name: Update and publish
 
-# Cada hora: trae de IESO lo nuevo (y lo que falte de los últimos 7 días), guarda los CSV en
-# data/ y publica el sitio en GitHub Pages. El cron de GitHub puede atrasarse (a veces horas);
-# "Run workflow" en la página de Actions lo corre a mano.
+# Every hour: fetch what's new from IESO (and anything missing from the last 7 days), commit the
+# CSVs in data/ and publish the site to GitHub Pages. GitHub's cron is best-effort (runs can be
+# hours late or skipped; the next one fills the gap); "Run workflow" on the Actions page forces one.
 on:
   schedule:
     - cron: '17 * * * *'
@@ -17,11 +17,11 @@ permissions:
   id-token: write
 
 concurrency:
-  group: actualizar-y-publicar
+  group: update-and-publish
   cancel-in-progress: false
 
 jobs:
-  actualizar:
+  update:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -33,42 +33,42 @@ jobs:
 
     - run: pip install -r requirements.txt
 
-    # Si IESO falla, se publica igual con lo que ya hay; la próxima hora vuelve a intentar
-    # todo lo que falte.
-    - name: Descargar datos de IESO
-      id: ingesta
+    # If IESO fails the site is still published with what we have; the next run retries
+    # everything that is missing.
+    - name: Fetch IESO data
+      id: ingest
       continue-on-error: true
       run: python ingest/update.py
 
-    - name: Guardar los datos nuevos
+    - name: Commit new data
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git add data
         if git diff --cached --quiet; then
-          echo "Sin datos nuevos"
+          echo "No new data"
         else
-          git commit -q -m "Datos IESO $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git commit -q -m "IESO data $(date -u +'%Y-%m-%d %H:%M UTC')"
           git pull -q --rebase origin main
           git push -q origin HEAD:main
         fi
 
-    - name: Construir el sitio
+    - name: Build the site
       run: python build.py
 
     - uses: actions/upload-pages-artifact@v3
       with:
         path: _site
 
-    - name: Marcar el run en rojo si la ingesta falló
-      if: steps.ingesta.outcome == 'failure'
+    - name: Mark the run red if the fetch failed
+      if: steps.ingest.outcome == 'failure'
       run: |
-        echo "::error::La descarga de IESO falló; el sitio se publicó con los datos anteriores."
+        echo "::error::The IESO fetch failed; the site was published with the previous data."
         exit 1
 
-  publicar:
-    needs: actualizar
-    if: always() && needs.actualizar.result != 'cancelled'
+  publish:
+    needs: update
+    if: always() && needs.update.result != 'cancelled'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

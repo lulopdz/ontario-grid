@@ -110,6 +110,27 @@ def build():
     o = read("adequacy_outlook.csv").sort_values("t")
     sizes["adequacy_outlook"] = write("adequacy_outlook.json", {**columns(o, adq_cols, 0), "created_at": o["created_at"].max()})
 
+    # Virtual transactions: what all virtual traders together bid, offered and got scheduled in
+    # the DAM, by hub (IESO publishes totals, not participants). Their P&L is the net scheduled
+    # position times DART -- a virtual supply sells at DA and buys back at RT, a virtual load
+    # (negative net) the reverse -- before any fees or uplift.
+    vt = pd.concat(pd.read_csv(f) for f in sorted((DATA / "virtual_transactions").glob("*.csv")))
+    vt["t"] = pd.to_datetime(vt["date"]) + pd.to_timedelta(vt["he"] - 1, unit="h")
+    vt["load_scheduled"] = vt["load_scheduled"].abs()  # IESO signs it negative; charts show sizes
+    vt = vt.merge(p[["t", "zone", "dart"]], on=["t", "zone"], how="left")
+    vt["pnl"] = vt["net_scheduled"] * vt["dart"]
+    hubs = vt[vt["zone"] != "TOTAL"]
+    vt_cols = ["supply_offered", "supply_scheduled", "load_bid", "load_scheduled", "net_scheduled", "dart", "pnl"]
+    for z in sorted(hubs["zone"].unique()):
+        sizes[f"virtuals_{z}"] = write(f"virtuals_{z}.json", columns(hubs[hubs["zone"] == z].sort_values("t"), vt_cols, 2))
+    # All hubs: summed positions; P&L summed hub by hub (there is no single all-hub DART).
+    total_vt = hubs.groupby("t", as_index=False).agg(
+        **{c: (c, "sum") for c in vt_cols[:5]}, pnl=("pnl", lambda s: s.sum(min_count=1)))
+    total_vt["dart"] = None
+    sizes["virtuals_ALL"] = write("virtuals_ALL.json", columns(total_vt.sort_values("t"), vt_cols, 2))
+    meta["virtual_zones"] = ["ALL", *sorted(hubs["zone"].unique())]
+    meta["virtuals_first"] = vt["date"].min()
+
     write("meta.json", meta)
     total = sum(sizes.values())
     print(f"Built {OUT}: {len(sizes)} data files, {total / 1e6:.1f} MB")

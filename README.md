@@ -2,7 +2,8 @@
 
 Ontario's electricity market from IESO's public data: day-ahead and real-time prices for the nine
 virtual zonal hubs and their spread (DART), generation by fuel, actual demand against the
-forecast, interties with the neighbours, and next week's adequacy.
+forecast, interties with the neighbours, next week's adequacy, and what virtual traders as a group
+bid, got scheduled and made in the day-ahead market (IESO publishes their totals, not who they are).
 
 **Site:** https://lulopdz.github.io/ontario-grid/ (English; Spanish behind the EN/ES button)
 

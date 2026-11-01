@@ -26,6 +26,7 @@
   <button role="tab" data-view="generation" aria-selected="false" data-i18n="tabGeneration">Generation</button>
   <button role="tab" data-view="demand" aria-selected="false" data-i18n="tabDemand">Demand</button>
   <button role="tab" data-view="interties" aria-selected="false" data-i18n="tabInterties">Interties</button>
+  <button role="tab" data-view="virtuals" aria-selected="false" data-i18n="tabVirtuals">Virtuals</button>
 </nav>
 
 <div class="filters">
@@ -89,6 +90,22 @@
       <div class="chart" id="chart-adequacy"></div>
     </figure>
     <details class="card table-wrap"><summary data-i18n="tInterties">Show table (daily net flow, MW)</summary><div id="interties-table"></div></details>
+  </section>
+  <section id="view-virtuals" class="view" hidden>
+    <div class="tiles" id="virtuals-tiles"></div>
+    <figure class="card">
+      <figcaption><h2 data-i18n="hVtNet">Net virtual position</h2><p class="note" id="vt-net-note"></p></figcaption>
+      <div class="chart" id="chart-vt-net"></div>
+    </figure>
+    <figure class="card">
+      <figcaption><h2 data-i18n="hVtProfile">Net position by hour of day</h2><p class="note" id="vt-profile-note"></p></figcaption>
+      <div class="chart" id="chart-vt-profile"></div>
+    </figure>
+    <figure class="card">
+      <figcaption><h2 data-i18n="hVtPnl">Virtual traders' P&amp;L</h2><p class="note" id="vt-pnl-note"></p></figcaption>
+      <div class="chart" id="chart-vt-pnl"></div>
+    </figure>
+    <details class="card table-wrap"><summary data-i18n="tVirtuals">Show table (daily)</summary><div id="virtuals-table"></div></details>
   </section>
 </main>
 

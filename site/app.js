@@ -46,6 +46,18 @@
       intertiesNote: (h) => `MW, ${h}. Positive: Ontario exports; negative: imports`,
       adequacyNote: (c) => `MW, hourly. Forecast supply capacity against what is required (demand, reserves and exports). IESO forecast of ${c}`,
       supply: 'Supply capacity', required: 'Required', total: 'Total',
+      tabVirtuals: 'Virtuals', hVtNet: 'Net virtual position', hVtProfile: 'Net position by hour of day',
+      hVtPnl: "Virtual traders' P&L", tVirtuals: 'Show table (daily)', allHubs: 'All hubs',
+      vtNetAvg: 'Average net position', vtSupplySide: 'net virtual supply (sells DA, buys back RT)',
+      vtLoadSide: 'net virtual demand (buys DA, sells back RT)', vtCleared: 'Scheduled vs offered',
+      vtClearedHint: (sup, dem) => `supply ${sup}% · demand ${dem}%`, vtPnl: "Virtual traders' P&L",
+      vtPnlHint: (r) => `all traders together, ${r}, before fees`, vtRight: 'Hours on the right side',
+      vtRightHint: (n) => `hours the net position made money, of ${n}`,
+      vtNetNote: (h, z, f) => `MW, ${h}, ${z}. Positive: net virtual supply (pays when DA > RT); negative: net virtual demand. IESO publishes all traders' totals, not individual participants. Data since ${f}`,
+      vtProfileNote: (r) => `Average scheduled MW by hour ending, ${r}`,
+      vtPnlNote: 'Daily, $: net scheduled MW × DART, hub by hub, before fees and uplift',
+      colSupOff: 'Supply offered', colSupSch: 'Supply scheduled', colDemBid: 'Demand bid', colDemSch: 'Demand scheduled',
+      colNet: 'Net', colPnl: 'P&L', hourEnding: 'Hour ending',
     },
     es: {
       sub: 'El mercado eléctrico de Ontario, con los datos públicos de IESO', loading: 'Cargando…',
@@ -84,6 +96,18 @@
       intertiesNote: (h) => `MW, ${h}. Positivo: Ontario exporta; negativo: importa`,
       adequacyNote: (c) => `MW por hora. Capacidad de suministro pronosticada frente a lo requerido (demanda, reservas y exportaciones). Pronóstico de IESO del ${c}`,
       supply: 'Capacidad de suministro', required: 'Requerido', total: 'Total',
+      tabVirtuals: 'Virtuales', hVtNet: 'Posición virtual neta', hVtProfile: 'Posición neta por hora del día',
+      hVtPnl: 'P&L de los traders virtuales', tVirtuals: 'Ver tabla (diaria)', allHubs: 'Todas las zonas',
+      vtNetAvg: 'Posición neta promedio', vtSupplySide: 'supply virtual neto (vende en DA, recompra en RT)',
+      vtLoadSide: 'demanda virtual neta (compra en DA, revende en RT)', vtCleared: 'Programado vs ofertado',
+      vtClearedHint: (sup, dem) => `supply ${sup}% · demanda ${dem}%`, vtPnl: 'P&L de los traders virtuales',
+      vtPnlHint: (r) => `todos los traders juntos, ${r}, antes de cargos`, vtRight: 'Horas del lado correcto',
+      vtRightHint: (n) => `horas en que la posición neta ganó, de ${n}`,
+      vtNetNote: (h, z, f) => `MW, ${h}, ${z}. Positivo: supply virtual neto (gana si DA > RT); negativo: demanda virtual neta. IESO publica el total de todos los traders, no a cada participante. Datos desde el ${f}`,
+      vtProfileNote: (r) => `MW programados en promedio por hora (hour ending), ${r}`,
+      vtPnlNote: 'Diario, $: MW netos programados × DART, zona por zona, antes de cargos y uplift',
+      colSupOff: 'Supply ofertado', colSupSch: 'Supply programado', colDemBid: 'Demanda ofertada', colDemSch: 'Demanda programada',
+      colNet: 'Neto', colPnl: 'P&L', hourEnding: 'Hora (HE)',
     },
   };
   // Dates: English reads "Oct 30"; Spanish keeps day/month, since Plotly's month names are English.
@@ -96,7 +120,7 @@
   const NEIGHBOUR_KEYS = ['quebec', 'new_york', 'michigan', 'minnesota', 'manitoba'];
   const HOURLY_MAX_DAYS = 90; // longer ranges read the daily series (build.py keeps 120 days hourly)
 
-  const state = { view: 'prices', days: 30, zone: 'TORONTO', lang: 'en' };
+  const state = { view: 'prices', days: 30, zone: 'TORONTO', vtZone: 'ALL', lang: 'en' };
   const L = () => STRINGS[state.lang] || STRINGS.en;
   const fmt = (v, d = 0) => (v == null || Number.isNaN(v) ? '—'
     : v.toLocaleString(DATES[state.lang].locale, { minimumFractionDigits: d, maximumFractionDigits: d }));
@@ -143,6 +167,17 @@
       keys.forEach((k) => acc[k].push(obj[k][i]));
     });
     flush();
+    return out;
+  }
+
+  // Daily totals of one column (null when the day has no value at all).
+  function dailySum(obj, key) {
+    const out = { t: [], v: [] };
+    obj.t.forEach((t, i) => {
+      const d = t.slice(0, 10);
+      if (out.t[out.t.length - 1] !== d) { out.t.push(d); out.v.push(null); }
+      if (obj[key][i] != null) out.v[out.v.length - 1] = (out.v[out.v.length - 1] || 0) + obj[key][i];
+    });
     return out;
   }
 
@@ -301,7 +336,58 @@
       lastDays(fd).map((i) => [fd.t[i].slice(0, 10), ...NEIGHBOUR_KEYS.map((k) => fmt(fd[`${k}_flow`][i])), fmt(fd.total_flow[i])]));
   }
 
-  const VIEWS = { prices, generation, demand, interties };
+  async function virtuals() {
+    const s = L();
+    const zone = state.vtZone;
+    const all = await load(`virtuals_${zone}`);
+    const hourly = state.days && state.days <= HOURLY_MAX_DAYS;
+    const h = slice(all, state.days);
+    const d = hourly ? h : dailyMean(h);
+    const zoneName = zone === 'ALL' ? s.allHubs : zone;
+    const net = mean(h.net_scheduled);
+    const sum = (k) => h[k].reduce((acc, v) => acc + (v || 0), 0);
+    const pct = (a, b) => (b ? fmt((a / b) * 100, 0) : '—');
+    // "Right side": the net position's sign against DART's, over hours with both (per hub for All).
+    const sided = h.t.map((_, i) => i).filter((i) => h.pnl[i] != null && h.net_scheduled[i] !== 0);
+    const right = sided.filter((i) => h.pnl[i] > 0).length;
+    const pnl = sum('pnl');
+    tiles('#virtuals-tiles', [
+      [s.vtNetAvg, mw(net), net == null ? '' : (net >= 0 ? s.vtSupplySide : s.vtLoadSide)],
+      [s.vtCleared, `${pct(sum('supply_scheduled') + sum('load_scheduled'), sum('supply_offered') + sum('load_bid'))}%`,
+        s.vtClearedHint(pct(sum('supply_scheduled'), sum('supply_offered')), pct(sum('load_scheduled'), sum('load_bid')))],
+      [s.vtPnl, money(pnl, 0), s.vtPnlHint(rangeLabel())],
+      [s.vtRight, sided.length ? `${fmt((right / sided.length) * 100, 0)}%` : '—', s.vtRightHint(fmt(sided.length))],
+    ]);
+    const pos = css('--pos'), neg = css('--neg');
+    const bars = (x, y, name, unit) => ({
+      x, y, name, type: 'bar', marker: { color: y.map((v) => (v >= 0 ? pos : neg)) },
+      hovertemplate: unit === '$' ? `%{y:$,.0f}<extra>${name}</extra>` : `%{y:,.1f} MW<extra>${name}</extra>`,
+    });
+    const tight = { showlegend: false, bargap: 0.15, margin: { l: 58, r: 12, t: 8, b: 36 } };
+    $('#vt-net-note').textContent = s.vtNetNote(hourly ? s.hourly : s.dailyAvg, zoneName, all.t[0].slice(0, 10));
+    draw('chart-vt-net', [bars(d.t, d.net_scheduled, s.colNet)], layout(tight, hourly));
+
+    // Average net position by hour ending over the range: where in the day the crowd leans.
+    const byHour = Array.from({ length: 24 }, (_, k) => mean(h.t.map((t, i) => (Number(t.slice(11, 13)) === k ? h.net_scheduled[i] : null))));
+    const base = layout(tight);
+    $('#vt-profile-note').textContent = s.vtProfileNote(rangeLabel());
+    draw('chart-vt-profile', [bars(byHour.map((_, k) => k + 1), byHour, s.colNet)],
+      { ...base, hovermode: 'closest', xaxis: { ...base.xaxis, type: 'linear', tickformat: '', hoverformat: '', dtick: window.innerWidth < 600 ? 3 : 1, title: { text: s.hourEnding, font: { size: 12 } } } });
+
+    const daily = dailySum(h, 'pnl');
+    $('#vt-pnl-note').textContent = s.vtPnlNote;
+    const dayAxis = layout(tight, true);  // daily bars: day ticks ("Oct 04"), day-only hover
+    draw('chart-vt-pnl', [bars(daily.t, daily.v, s.colPnl, '$')],
+      { ...dayAxis, xaxis: { ...dayAxis.xaxis, hoverformat: DATES[state.lang].hoverDay } });
+
+    const dd = dailyMean(h);
+    const pnlByDay = Object.fromEntries(daily.t.map((t, i) => [t, daily.v[i]]));
+    table('#virtuals-table', [s.day, s.colSupOff, s.colSupSch, s.colDemBid, s.colDemSch, s.colNet, s.colPnl],
+      lastDays(dd).map((i) => [dd.t[i], fmt(dd.supply_offered[i], 1), fmt(dd.supply_scheduled[i], 1), fmt(dd.load_bid[i], 1),
+        fmt(dd.load_scheduled[i], 1), fmt(dd.net_scheduled[i], 1), money(pnlByDay[dd.t[i]], 0)]));
+  }
+
+  const VIEWS = { prices, generation, demand, interties, virtuals };
 
   // --- wiring ------------------------------------------------------------------------------
   let meta = null;
@@ -315,7 +401,15 @@
     document.querySelectorAll('.view').forEach((sec) => (sec.hidden = sec.id !== `view-${state.view}`));
     document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === state.view)));
     document.querySelectorAll('#range button').forEach((b) => b.classList.toggle('on', Number(b.dataset.days) === state.days));
-    $('#zone-wrap').hidden = state.view !== 'prices';
+    // Prices and Virtuals share the zone picker, each with its own list and choice.
+    $('#zone-wrap').hidden = !['prices', 'virtuals'].includes(state.view);
+    if (meta && ['prices', 'virtuals'].includes(state.view)) {
+      const vt = state.view === 'virtuals';
+      const zones = vt ? meta.virtual_zones : meta.zones;
+      const key = vt ? 'vtZone' : 'zone';
+      if (!zones.includes(state[key])) state[key] = zones[0];
+      $('#zone').innerHTML = zones.map((z) => `<option value="${z}" ${z === state[key] ? 'selected' : ''}>${z === 'ALL' ? L().allHubs : z}</option>`).join('');
+    }
     document.querySelectorAll('.load-error').forEach((el) => el.remove());
     try {
       await VIEWS[state.view]();
@@ -335,10 +429,9 @@
     applyStrings();
     meta = await load('meta');
     if (!meta.zones.includes(state.zone)) state.zone = meta.zones.includes('TORONTO') ? 'TORONTO' : meta.zones[0];
-    $('#zone').innerHTML = meta.zones.map((z) => `<option ${z === state.zone ? 'selected' : ''}>${z}</option>`).join('');
     document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => { state.view = b.dataset.view; save(); render(); }));
     document.querySelectorAll('#range button').forEach((b) => b.addEventListener('click', () => { state.days = Number(b.dataset.days); save(); render(); }));
-    $('#zone').addEventListener('change', (e) => { state.zone = e.target.value; save(); render(); });
+    $('#zone').addEventListener('change', (e) => { state[state.view === 'virtuals' ? 'vtZone' : 'zone'] = e.target.value; save(); render(); });
     $('#lang').addEventListener('click', () => { state.lang = state.lang === 'en' ? 'es' : 'en'; save(); render(); });
     $('#theme').addEventListener('click', () => {
       const next = matchesDark() ? 'light' : 'dark';

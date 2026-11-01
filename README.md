@@ -9,6 +9,8 @@ bid, got scheduled and made in the day-ahead market (IESO publishes their totals
 
 Independent project, not affiliated with IESO.
 
+Next steps and ready-to-use prompts for future work sessions: [`docs/PROMPTS.md`](docs/PROMPTS.md) (in Spanish).
+
 ## The site
 
 | Tab | What it shows |

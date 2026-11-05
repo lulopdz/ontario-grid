@@ -87,11 +87,13 @@ IESO's hourly consumption by Forward Sortation Area (FSA, the postal code's firs
 characters: 563 areas), for residential and small business customers (under 50 kW) -- about a
 third of Ontario's demand; large commercial and industrial load is not in it. Published monthly
 about three months late, by customer type and price plan (TOU, Tiered, ULO, Retailer). IESO keeps
-it back to 2018; this archive starts at 2026-01 (`FSA_FIRST_MONTH` in `ingest/update.py`). The
-hourly rows are too big for git (~370 MB a year), so two levels are kept, one CSV per month:
+it back to 2018; this archive starts at 2025-01 (`FSA_FIRST_MONTH` in `ingest/update.py`). One
+file per month at three levels; `data/fsa_manifest.csv` lists the months stored, because the
+hourly workflow leaves `fsa_hourly/` (~80 MB a year) out of its checkout:
 
 | Folder | Contents |
 |---|---|
+| `fsa_hourly/` | Every hour: kWh and premises by FSA and customer type, price plans summed (`YYYY-MM.csv.gz`, ~6.8 MB a month; pandas reads it as is). Written once per month, never rewritten |
 | `fsa_daily/` | Daily kWh by FSA, customer type and price plan, with the mean number of premises |
 | `fsa_hourly_profile/` | Mean kWh for each hour of the day over the month, by FSA and customer type |
 

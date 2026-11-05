@@ -32,10 +32,14 @@ archive started:
                           and last seen (first_seen before planned_start = known ahead)
 
 Consumption by postal area (FSA), one file per month, from FSA_FIRST_MONTH on. IESO publishes
-each month ~3 months late and keeps them back to 2018; the hourly rows (~1.5M a month) are too
-big for git, so they are kept at two levels:
+each month ~3 months late and keeps them back to 2018. Three levels:
+  fsa_hourly/YYYY-MM.csv.gz  date, he, fsa, customer_type, kwh, premises -- every hour, price plans
+                          summed (~4.6 MB a month gzipped; the plan split triples it and is in
+                          fsa_daily). Written once per month, never rewritten.
   fsa_daily/              date, fsa, customer_type, price_plan, kwh, premises (daily mean), version
-  fsa_hourly_profile/     month, fsa, customer_type, he, kwh (mean over the month's days), version"""
+  fsa_hourly_profile/     month, fsa, customer_type, he, kwh (mean over the month's days), version
+  fsa_manifest.csv        month, version: what is stored. The hourly workflow skips fsa_hourly/ in
+                          its checkout, so this, not the files, says which months are done."""
 import argparse
 import sys
 from pathlib import Path
@@ -303,16 +307,15 @@ def update_outages(today):
 
 # --- consumption by postal area --------------------------------------------------------------
 
-FSA_FIRST_MONTH = "2026-01"  # earlier months are still on IESO's site if they are ever wanted
+FSA_FIRST_MONTH = "2025-01"  # earlier months (back to 2018) are still on IESO's site
+FSA_MANIFEST = DATA / "fsa_manifest.csv"
 
 
 def update_fsa(first_month=FSA_FIRST_MONTH):
     """Fetch every month (or newer version of one) not yet stored, from first_month on."""
     files = ieso.listing("HourlyConsumptionByFSA")
-    stored = {}
-    folder = DATA / "fsa_daily"
-    for f in folder.glob("*.csv") if folder.exists() else []:
-        stored[f.stem] = int(pd.read_csv(f, usecols=["version"], nrows=1)["version"].iloc[0])
+    manifest = pd.read_csv(FSA_MANIFEST) if FSA_MANIFEST.exists() else pd.DataFrame(columns=["month", "version"])
+    stored = dict(zip(manifest["month"], manifest["version"].astype(int)))
     todo = {m: v for m, v in ieso.fsa_months(files).items() if m >= first_month and stored.get(m, 0) < v[1]}
     for month, (name, version) in sorted(todo.items()):
         raw = ieso.fsa_consumption(name)
@@ -328,6 +331,14 @@ def update_fsa(first_month=FSA_FIRST_MONTH):
             (DATA / out).mkdir(exist_ok=True)
             df.assign(kwh=df["kwh"].round(1), version=version).round({"premises": 1}).sort_values(keys).to_csv(
                 DATA / out / f"{month}.csv", index=False)
+        hourly = (raw.groupby(["date", "he", "fsa", "customer_type"], as_index=False)
+                  .agg(kwh=("kwh", "sum"), premises=("premises", "sum")))
+        (DATA / "fsa_hourly").mkdir(exist_ok=True)
+        # mtime=0: the same data always gzips to the same bytes, so a re-run commits nothing.
+        hourly.assign(kwh=hourly["kwh"].round(1)).to_csv(
+            DATA / "fsa_hourly" / f"{month}.csv.gz", index=False, compression={"method": "gzip", "mtime": 0})
+        stored[month] = version
+        pd.DataFrame(sorted(stored.items()), columns=["month", "version"]).to_csv(FSA_MANIFEST, index=False)
         print(f"  fsa {month} (v{version}): {raw['fsa'].nunique()} FSAs, {raw['kwh'].sum() / 1e6:,.0f} GWh")
     print(f"fsa: {len(todo)} month(s) fetched")
 

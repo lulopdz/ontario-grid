@@ -24,7 +24,14 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
+    # Everything but the hourly FSA archive (~55 MB a year, never read here): data/fsa_manifest.csv
+    # tells the update which months are stored, and a new month is added with git add --sparse.
     - uses: actions/checkout@v4
+      with:
+        sparse-checkout: |
+          /*
+          !/data/fsa_hourly/
+        sparse-checkout-cone-mode: false
 
     - uses: actions/setup-python@v5
       with:
@@ -44,7 +51,7 @@ jobs:
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git add data
+        git add --sparse data
         if git diff --cached --quiet; then
           echo "No new data"
         else

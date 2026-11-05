@@ -187,7 +187,7 @@ def seed_prices(src):
 
 def update_yearly(full):
     year = ieso.market_now().year
-    years = range(FIRST_YEAR, year + 1) if full else ([year - 1, year] if ieso.market_now().dayofyear <= 7 else [year])
+    years = range(FIRST_YEAR, year + 1) if full else ([year - 1, year] if ieso.market_now().day_of_year <= 7 else [year])
     for name, reader in (("generation.csv", ieso.generation), ("demand.csv", ieso.demand), ("interties.csv", ieso.interties)):
         frames = [df for df in (reader(y) for y in years) if df is not None]
         if not frames:

@@ -1,0 +1,263 @@
+<title>Consumo residencial por FSA</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: one working map with its controls above and the selected area beside it; rankings and
+   notes below. A public-data utility, so plain government-grade type and a quiet blue. */
+:root {
+  --bg: #f6f7f6; --surface: #fdfdfc; --fg: #14181c; --fg-2: #4b535a; --muted: #7c858c;
+  --line: #dde1e2; --ring: rgba(20, 24, 28, .12); --accent: #2a78d6; --nodata: #e9ebe9;
+  --edge: rgba(255, 255, 255, .85);
+  --seq: #cde2fb #9ec5f4 #6da7ec #3987e5 #256abf #184f95 #0d366b;
+  --div: #1c5cab #5598e7 #b7d3f6 #e6e4dd #f4b4a3 #e5735f #b8322a;
+  --sans: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101315; --surface: #181c1f; --fg: #eef0ef; --fg-2: #c0c6c9; --muted: #8b9398;
+    --line: #2c3236; --ring: rgba(255, 255, 255, .1); --accent: #3987e5; --nodata: #262b2e;
+    --edge: rgba(16, 19, 21, .9);
+    --seq: #1b2f4a #1c4a84 #22609f #3987e5 #6da7ec #9ec5f4 #d4e6fb;
+    --div: #6da7ec #3c6fae #24476e #383d40 #7a3a30 #c4523f #f08a76;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101315; --surface: #181c1f; --fg: #eef0ef; --fg-2: #c0c6c9; --muted: #8b9398;
+  --line: #2c3236; --ring: rgba(255, 255, 255, .1); --accent: #3987e5; --nodata: #262b2e;
+  --edge: rgba(16, 19, 21, .9);
+  --seq: #1b2f4a #1c4a84 #22609f #3987e5 #6da7ec #9ec5f4 #d4e6fb;
+  --div: #6da7ec #3c6fae #24476e #383d40 #7a3a30 #c4523f #f08a76;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--sans); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 24px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 16px; }
+h1 { font-size: 26px; line-height: 1.2; margin: 0; text-wrap: balance; letter-spacing: -.01em; }
+h2 { font-size: 15px; margin: 0; }
+.lede { margin: 6px 0 0; color: var(--fg-2); max-width: 70ch; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.group > span { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--ring); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button { font: 600 13px var(--sans); color: var(--fg-2); background: none; border: 0; padding: 7px 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--ring); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; align-items: start; }
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.mapcard { padding: 0; overflow: hidden; position: relative; }
+#map { display: block; width: 100%; height: min(68vh, 620px); touch-action: none; cursor: grab; }
+#map path { fill-rule: evenodd; stroke: var(--edge); vector-effect: non-scaling-stroke; stroke-width: .6; }
+#map path.sel { stroke: var(--fg); stroke-width: 2; }
+.legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 16px 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--fg-2); }
+.legend .title { font-weight: 600; color: var(--fg); margin-right: 4px; }
+.legend .steps { display: flex; gap: 2px; }
+.legend .steps div { display: grid; gap: 3px; justify-items: start; font: 500 11px var(--mono); color: var(--muted); }
+.legend .steps i { display: block; width: 46px; height: 10px; border-radius: 3px; }
+.legend .nd { display: inline-flex; gap: 6px; align-items: center; }
+.legend .nd i { width: 14px; height: 10px; border-radius: 3px; background: var(--nodata); display: inline-block; border: 1px solid var(--ring); }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--ring); border-radius: 8px; padding: 8px 10px; font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,.12); white-space: nowrap; }
+.code { font: 500 18px var(--mono); }
+dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 10px 0 0; font-size: 14px; }
+dt { color: var(--muted); }
+dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.hint { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+.ranks { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; margin-top: 8px; }
+th, td { padding: 5px 6px; border-bottom: 1px solid var(--line); text-align: right; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--muted); font-weight: 600; }
+td button { font: 500 13px var(--mono); color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; }
+.notes { color: var(--fg-2); font-size: 13px; }
+.notes ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+@media (max-width: 820px) { .main { grid-template-columns: minmax(0, 1fr); } #map { height: 62vh; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Consumo residencial por FSA</h1>
+    <p class="lede" id="lede"></p>
+  </header>
+
+  <div class="controls">
+    <div class="group"><span>Métrica</span>
+      <div class="seg" id="metric">
+        <button id="m-kwh" data-m="kwh_home" aria-pressed="true">kWh por hogar</button>
+        <button id="m-ratio" data-m="summer_ratio" aria-pressed="false">Verano vs invierno</button>
+        <button id="m-density" data-m="density" aria-pressed="false">Hogares por km²</button>
+      </div>
+    </div>
+    <div class="group"><span>Zona</span>
+      <div class="seg" id="region">
+        <button id="r-on" data-r="on" aria-pressed="true">Ontario</button>
+        <button id="r-sw" data-r="sw" aria-pressed="false">Sur</button>
+        <button id="r-gta" data-r="gta" aria-pressed="false">GTA</button>
+        <button id="r-ott" data-r="ott" aria-pressed="false">Ottawa</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="card mapcard">
+      <svg id="map" role="img" aria-label="Mapa de Ontario por zona postal"></svg>
+      <div class="tip" id="tip" hidden></div>
+      <div class="legend" id="legend"></div>
+    </div>
+    <aside class="card" id="detail" aria-live="polite"></aside>
+  </div>
+
+  <div class="ranks">
+    <div class="card"><h2 id="top-title"></h2><table id="top"></table></div>
+    <div class="card"><h2 id="bottom-title"></h2><table id="bottom"></table></div>
+  </div>
+
+  <div class="card notes">
+    <h2>Cómo leerlo</h2>
+    <ul id="notes"></ul>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script>
+(() => {
+  const GEO = /*__GEO__*/null;
+  const META = /*__META__*/null;
+  const $ = (s) => document.querySelector(s);
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  const nf = (v, d = 0) => v == null ? '—' : v.toLocaleString('es-MX', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const mon = (m) => `${MONTHS[+m.slice(5, 7) - 1]} ${m.slice(0, 4)}`;
+
+  // Each metric: thresholds between 7 classes, a ramp (sequential or diverging) and its words.
+  const METRICS = {
+    kwh_home: { label: 'kWh por hogar al mes', ramp: '--seq', t: [450, 600, 700, 800, 950, 1150], fmt: (v) => `${nf(v)} kWh`,
+      top: 'Más consumo por hogar', bottom: 'Menos consumo por hogar' },
+    summer_ratio: { label: `${mon(META.last)} ÷ ${mon(META.first)}, kWh por hogar`, ramp: '--div', t: [0.7, 0.8, 0.9, 1.1, 1.3, 1.6],
+      fmt: (v) => `${nf(v, 2)}×`, top: 'Más cargadas en verano', bottom: 'Más cargadas en invierno' },
+    density: { label: 'Hogares por km² de tierra', ramp: '--seq', t: [5, 25, 100, 500, 1500, 4000], fmt: (v) => nf(v, v < 10 ? 1 : 0),
+      top: 'Más densas', bottom: 'Menos densas' },
+  };
+  const REGIONS = { on: [[-95.2, 41.6], [-74.3, 56.9]], sw: [[-83.2, 41.6], [-78.2, 45.3]], gta: [[-80.1, 43.4], [-78.8, 44.1]], ott: [[-76.3, 45.0], [-75.2, 45.6]] };
+  let metric = 'kwh_home', region = 'on', selected = null;
+  try { const s = JSON.parse(localStorage.getItem('fsa-map') || '{}'); if (METRICS[s.metric]) metric = s.metric; } catch (e) { /* no storage */ }
+
+  // Drawn on a plane, not d3's sphere: on the sphere a ring wound the other way reads as "the
+  // whole globe but this area" and paints over everything. Longitude is scaled by cos(49°), a
+  // plain equirectangular view that is close enough at Ontario's latitudes; holes use evenodd.
+  const COS = Math.cos(49 * Math.PI / 180);
+  const flat = ([lon, lat]) => [lon * COS, lat];
+  const walk = (c) => typeof c[0] === 'number' ? flat(c) : c.map(walk);
+  GEO.features.forEach((f) => { f.geometry.coordinates = walk(f.geometry.coordinates); });
+  const byFsa = new Map(GEO.features.map((f) => [f.properties.fsa, f]));
+
+  $('#lede').textContent = `Clientes residenciales de IESO en ${META.fsas} zonas postales (FSA), ${mon(META.first)} a ${mon(META.last)}. Toca o pasa sobre una zona para ver sus números; arrastra y usa la rueda o los dedos para acercar.`;
+  $('#notes').innerHTML = [
+    'Solo hogares: el reporte de IESO no incluye industria ni comercio grande. Los pequeños comercios (&lt;50 kW) van aparte y no están en este mapa.',
+    'IESO oculta por privacidad las combinaciones zona × plan con pocos clientes y las agrupa en códigos de 2 caracteres (~20% del consumo). Por eso se muestra consumo <em>por hogar</em>: lo ocultado sale del consumo y de los hogares a la vez. Los totales por zona quedarían cortos.',
+    `Desde ${mon(META.first)}: el 1 de febrero de 2026 IESO cambió ese método y el conteo de hogares salta en algunas zonas. En gris, zonas sin datos o con menos de ${META.min_homes} hogares.`,
+    'Fuentes: IESO, Hourly Consumption by FSA; límites de Statistics Canada, censo 2021 (archivo cartográfico de FSA). Recolección en el repo ontario-grid.',
+  ].map((t) => `<li>${t}</li>`).join('');
+
+  const svg = d3.select('#map');
+  const g = svg.append('g');
+  const projection = d3.geoIdentity().reflectY(true);
+  const path = d3.geoPath(projection);
+  let W = 0, H = 0;
+  const zoom = d3.zoom().scaleExtent([1, 300]).on('zoom', (e) => g.attr('transform', e.transform));
+  svg.call(zoom);
+
+  function size() {
+    const r = svg.node().getBoundingClientRect(); W = r.width; H = r.height;
+    projection.fitExtent([[8, 8], [W - 8, H - 8]], GEO);
+    g.selectAll('path').attr('d', path);
+  }
+  function zoomTo(key, animate = true) {
+    const [[x0, y0], [x1, y1]] = REGIONS[key].map((p) => projection(flat(p)));
+    const bx = [Math.min(x0, x1), Math.max(x0, x1)], by = [Math.min(y0, y1), Math.max(y0, y1)];
+    const k = Math.min(300, 0.95 / Math.max((bx[1] - bx[0]) / W, (by[1] - by[0]) / H));
+    const t = d3.zoomIdentity.translate(W / 2 - k * (bx[0] + bx[1]) / 2, H / 2 - k * (by[0] + by[1]) / 2).scale(k);
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    (animate && !reduce ? svg.transition().duration(650) : svg).call(zoom.transform, t);
+  }
+
+  const colorOf = () => {
+    const m = METRICS[metric], ramp = css(m.ramp).split(/\s+/);
+    return (v) => v == null ? css('--nodata') : ramp[d3.bisectRight(m.t, v)];
+  };
+  function paint() {
+    const c = colorOf();
+    g.selectAll('path').attr('fill', (f) => c(f.properties[metric])).classed('sel', (f) => f.properties.fsa === selected);
+    const m = METRICS[metric], ramp = css(m.ramp).split(/\s+/);
+    const lab = (i) => i === 0 ? `< ${m.fmt(m.t[0])}` : i === ramp.length - 1 ? `≥ ${m.fmt(m.t[i - 1])}` : m.fmt(m.t[i - 1]);
+    $('#legend').innerHTML = `<span class="title">${m.label}</span><div class="steps">${ramp.map((col, i) => `<div><i style="background:${col}"></i>${lab(i)}</div>`).join('')}</div>`
+      + '<span class="nd"><i></i>Sin datos</span>';
+    ranks();
+    detail();
+  }
+  function detail() {
+    const f = selected && byFsa.get(selected);
+    if (!f) { $('#detail').innerHTML = '<h2>Zona seleccionada</h2><p class="hint">Toca una zona en el mapa o en las tablas de abajo.</p>'; return; }
+    const p = f.properties;
+    $('#detail').innerHTML = `<h2>Zona seleccionada</h2><div class="code">${p.fsa}</div><dl>
+      <dt>kWh por hogar al mes</dt><dd>${p.kwh_home == null ? '—' : nf(p.kwh_home)}</dd>
+      <dt>${mon(META.last)} ÷ ${mon(META.first)}</dt><dd>${p.summer_ratio == null ? '—' : nf(p.summer_ratio, 2) + '×'}</dd>
+      <dt>Hogares</dt><dd>${nf(p.homes)}</dd>
+      <dt>Superficie</dt><dd>${nf(p.land_km2, p.land_km2 < 10 ? 1 : 0)} km²</dd>
+      <dt>Hogares por km²</dt><dd>${p.density == null ? '—' : nf(p.density, p.density < 10 ? 1 : 0)}</dd></dl>
+      ${p.unstable ? '<p class="hint">El conteo de hogares varía más de 20% entre meses: IESO movió parte de esta zona a los códigos agrupados. Léelo con cuidado.</p>' : ''}
+      ${p.homes != null && p.homes < META.min_homes ? `<p class="hint">Menos de ${META.min_homes} hogares: no se colorea.</p>` : ''}`;
+  }
+  function ranks() {
+    const m = METRICS[metric];
+    const rows = GEO.features.map((f) => f.properties).filter((p) => p[metric] != null).sort((a, b) => b[metric] - a[metric]);
+    const fill = (id, list) => { $(id).innerHTML = `<thead><tr><th>FSA</th><th>${m.label}</th><th>Hogares</th></tr></thead><tbody>${list.map((p) =>
+      `<tr><td><button type="button" data-fsa="${p.fsa}">${p.fsa}</button></td><td>${m.fmt(p[metric])}</td><td>${nf(p.homes)}</td></tr>`).join('')}</tbody>`; };
+    $('#top-title').textContent = m.top; $('#bottom-title').textContent = m.bottom;
+    fill('#top', rows.slice(0, 10)); fill('#bottom', rows.slice(-10).reverse());
+  }
+  function select(fsa, focus) {
+    selected = fsa; paint();
+    if (focus) {
+      const [[x0, y0], [x1, y1]] = path.bounds(byFsa.get(fsa));
+      const k = Math.min(300, 0.5 / Math.max((x1 - x0) / W, (y1 - y0) / H));
+      svg.transition().duration(650).call(zoom.transform, d3.zoomIdentity.translate(W / 2 - k * (x0 + x1) / 2, H / 2 - k * (y0 + y1) / 2).scale(k));
+    }
+  }
+
+  const tip = $('#tip');
+  g.selectAll('path').data(GEO.features).join('path')
+    .on('pointermove', (e, f) => {
+      const p = f.properties, m = METRICS[metric], box = svg.node().getBoundingClientRect();
+      tip.hidden = false;
+      tip.innerHTML = `<strong>${p.fsa}</strong> · ${p[metric] == null ? 'sin datos' : m.fmt(p[metric])}<br><span style="color:var(--muted)">${nf(p.homes)} hogares</span>`;
+      const x = e.clientX - box.left, y = e.clientY - box.top;
+      tip.style.left = `${Math.min(x + 14, W - tip.offsetWidth - 8)}px`; tip.style.top = `${Math.max(8, y - tip.offsetHeight - 10)}px`;
+    })
+    .on('pointerleave', () => { tip.hidden = true; })
+    .on('click', (e, f) => select(f.properties.fsa, false));
+
+  document.querySelectorAll('#metric button').forEach((b) => b.addEventListener('click', () => {
+    metric = b.dataset.m;
+    document.querySelectorAll('#metric button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    try { localStorage.setItem('fsa-map', JSON.stringify({ metric })); } catch (e) { /* no storage */ }
+    paint();
+  }));
+  document.querySelectorAll('#metric button').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.m === metric)));
+  document.querySelectorAll('#region button').forEach((b) => b.addEventListener('click', () => {
+    region = b.dataset.r;
+    document.querySelectorAll('#region button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    zoomTo(region);
+  }));
+  document.addEventListener('click', (e) => { const b = e.target.closest('td button[data-fsa]'); if (b) select(b.dataset.fsa, true); });
+
+  size(); zoomTo(region, false); paint();
+  new ResizeObserver(() => { const k = d3.zoomTransform(svg.node()); size(); if (k.k === 1) zoomTo(region, false); }).observe(svg.node());
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', paint);
+  new MutationObserver(paint).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+})();
+</script>

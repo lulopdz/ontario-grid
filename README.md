@@ -98,6 +98,11 @@ hourly rows are too big for git (~370 MB a year), so two levels are kept, one CS
 IESO changed its privacy method on 2026-02-01, which can make premise counts jump in some FSAs:
 compare across that date with care.
 
+A map of it (kWh per home, summer vs winter, homes per km2), not part of the site:
+`python analysis/fsa_map.py --out map.html` builds one self-contained page from these files and
+`geo/fsa_ontario_2021.geojson` -- Statistics Canada's 2021 cartographic FSA boundaries, Ontario
+only, simplified to 5% in mapshaper (Statistics Canada Open Licence).
+
 All times are IESO market time: Eastern Standard Time all year, no daylight saving; `he` is the
 hour ending (1-24).
 

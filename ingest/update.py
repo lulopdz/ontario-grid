@@ -29,7 +29,13 @@ archive started:
   intertie_lmp/           date, he, point, da, rt
   generator_output/       date, he, generator, fuel, output, capability, available_capacity
   transmission_outages.csv  one row per outage request and equipment, with when it was first
-                          and last seen (first_seen before planned_start = known ahead)"""
+                          and last seen (first_seen before planned_start = known ahead)
+
+Consumption by postal area (FSA), one file per month, from FSA_FIRST_MONTH on. IESO publishes
+each month ~3 months late and keeps them back to 2018; the hourly rows (~1.5M a month) are too
+big for git, so they are kept at two levels:
+  fsa_daily/              date, fsa, customer_type, price_plan, kwh, premises (daily mean), version
+  fsa_hourly_profile/     month, fsa, customer_type, he, kwh (mean over the month's days), version"""
 import argparse
 import sys
 from pathlib import Path
@@ -295,15 +301,46 @@ def update_outages(today):
     return len(frames)
 
 
+# --- consumption by postal area --------------------------------------------------------------
+
+FSA_FIRST_MONTH = "2026-01"  # earlier months are still on IESO's site if they are ever wanted
+
+
+def update_fsa(first_month=FSA_FIRST_MONTH):
+    """Fetch every month (or newer version of one) not yet stored, from first_month on."""
+    files = ieso.listing("HourlyConsumptionByFSA")
+    stored = {}
+    folder = DATA / "fsa_daily"
+    for f in folder.glob("*.csv") if folder.exists() else []:
+        stored[f.stem] = int(pd.read_csv(f, usecols=["version"], nrows=1)["version"].iloc[0])
+    todo = {m: v for m, v in ieso.fsa_months(files).items() if m >= first_month and stored.get(m, 0) < v[1]}
+    for month, (name, version) in sorted(todo.items()):
+        raw = ieso.fsa_consumption(name)
+        if raw is None or raw.empty:
+            continue
+        daily = (raw.groupby(["date", "fsa", "customer_type", "price_plan"], as_index=False)
+                 .agg(kwh=("kwh", "sum"), premises=("premises", "mean")))
+        by_hour = raw.groupby(["fsa", "customer_type", "date", "he"], as_index=False)["kwh"].sum()
+        profile = by_hour.groupby(["fsa", "customer_type", "he"], as_index=False)["kwh"].mean()
+        profile.insert(0, "month", month)
+        for out, df, keys in (("fsa_daily", daily, ["date", "fsa", "customer_type", "price_plan"]),
+                              ("fsa_hourly_profile", profile, ["fsa", "customer_type", "he"])):
+            (DATA / out).mkdir(exist_ok=True)
+            df.assign(kwh=df["kwh"].round(1), version=version).round({"premises": 1}).sort_values(keys).to_csv(
+                DATA / out / f"{month}.csv", index=False)
+        print(f"  fsa {month} (v{version}): {raw['fsa'].nunique()} FSAs, {raw['kwh'].sum() / 1e6:,.0f} GWh")
+    print(f"fsa: {len(todo)} month(s) fetched")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--window", type=int, default=WINDOW_DAYS, help="days back to re-check for missing data")
     ap.add_argument("--full-years", action="store_true", help=f"re-read every yearly file since {FIRST_YEAR}")
     ap.add_argument("--seed-prices", default=None, help="lrg-dashboard data/ folder to start prices.csv from")
-    ap.add_argument("--only", default=None, help="comma list of prices,yearly,adequacy,market")
+    ap.add_argument("--only", default=None, help="comma list of prices,yearly,adequacy,market,fsa")
     args = ap.parse_args()
     DATA.mkdir(exist_ok=True)
-    only = set(args.only.split(",")) if args.only else {"prices", "yearly", "adequacy", "market"}
+    only = set(args.only.split(",")) if args.only else {"prices", "yearly", "adequacy", "market", "fsa"}
     if args.seed_prices:
         seed_prices(args.seed_prices)
     if "prices" in only:
@@ -314,6 +351,8 @@ def main():
         update_adequacy(args.window)
     if "market" in only:
         update_market(args.window)
+    if "fsa" in only:
+        update_fsa()
 
 
 if __name__ == "__main__":

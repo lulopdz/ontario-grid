@@ -377,3 +377,35 @@ def transmission_outages(name):
             rows.append({**base, "equipment": _text(eq, "EquipmentName"), "equipment_type": _text(eq, "EquipmentType"),
                          "voltage": _text(eq, "EquipmentVoltage"), "constraint_type": _text(eq, "ConstraintType")})
     return pd.DataFrame(rows)
+
+
+# --- Consumption by postal area (monthly, ~3 months late, kept since 2018) --------------------
+
+def fsa_months(listing_map):
+    """{YYYY-MM: (file name, version)} for the latest version of each monthly FSA report."""
+    out = {}
+    for name in listing_map:
+        m = re.match(r"PUB_HourlyConsumptionByFSA_(\d{4})(\d{2})_v(\d+)\.zip$", name)
+        if m:
+            month, version = f"{m.group(1)}-{m.group(2)}", int(m.group(3))
+            if month not in out or version > out[month][1]:
+                out[month] = (name, version)
+    return out
+
+
+def fsa_consumption(name):
+    """One month of hourly consumption by Forward Sortation Area (the postal code's first three
+    characters): fsa, date, he, customer_type (Residential, SGS <50kW), price_plan (TOU, Tiered,
+    ULO, Retailer), kwh, premises. Residential and small business only -- about a third of
+    Ontario's demand; no large commercial or industrial load."""
+    import zipfile
+    body = get(f"{BASE}/HourlyConsumptionByFSA/{name}")
+    if body is None:
+        return None
+    with zipfile.ZipFile(io.BytesIO(body)) as z:
+        csv_name = next(n for n in z.namelist() if n.lower().endswith(".csv"))
+        lines = [l for l in z.read(csv_name).decode("utf-8", "replace").splitlines() if not l.startswith("\\")]
+    df = pd.read_csv(io.StringIO("\n".join(lines)))
+    df = df.rename(columns={"FSA": "fsa", "DATE": "date", "HOUR": "he", "CUSTOMER_TYPE": "customer_type",
+                            "PRICE_PLAN": "price_plan", "TOTAL_CONSUMPTION": "kwh", "PREMISE_COUNT": "premises"})
+    return df[["fsa", "date", "he", "customer_type", "price_plan", "kwh", "premises"]]

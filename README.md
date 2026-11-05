@@ -81,6 +81,23 @@ everything IESO still had, hence the different start dates. One CSV per month in
 | `generator_output/` | Output, capability and available capacity of every grid-connected generator, MW | 2026-08-01 |
 | `transmission_outages.csv` | Transmission outages (today's and the 30-day planned list), with when each was first and last seen | 2026-10-31 |
 
+### Consumption by postal area (not on the site yet)
+
+IESO's hourly consumption by Forward Sortation Area (FSA, the postal code's first three
+characters: 563 areas), for residential and small business customers (under 50 kW) -- about a
+third of Ontario's demand; large commercial and industrial load is not in it. Published monthly
+about three months late, by customer type and price plan (TOU, Tiered, ULO, Retailer). IESO keeps
+it back to 2018; this archive starts at 2026-01 (`FSA_FIRST_MONTH` in `ingest/update.py`). The
+hourly rows are too big for git (~370 MB a year), so two levels are kept, one CSV per month:
+
+| Folder | Contents |
+|---|---|
+| `fsa_daily/` | Daily kWh by FSA, customer type and price plan, with the mean number of premises |
+| `fsa_hourly_profile/` | Mean kWh for each hour of the day over the month, by FSA and customer type |
+
+IESO changed its privacy method on 2026-02-01, which can make premise counts jump in some FSAs:
+compare across that date with care.
+
 All times are IESO market time: Eastern Standard Time all year, no daylight saving; `he` is the
 hour ending (1-24).
 

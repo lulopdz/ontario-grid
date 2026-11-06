@@ -104,6 +104,9 @@ A map of it (kWh per home, summer vs winter, homes per km2), not part of the sit
 `python analysis/fsa_map.py --out map.html` builds one self-contained page from these files and
 `geo/fsa_ontario_2021.geojson` -- Statistics Canada's 2021 cartographic FSA boundaries, Ontario
 only, simplified to 5% in mapshaper (Statistics Canada Open Licence).
+For desktop GIS, `python analysis/fsa_gis.py --out-dir gis/` writes the same numbers (plus kWh
+per home for each month) as a GeoPackage that opens styled in QGIS, a GeoJSON, and one QGIS style
+(`.qml`) per metric, with a README.
 
 All times are IESO market time: Eastern Standard Time all year, no daylight saving; `he` is the
 hour ending (1-24).

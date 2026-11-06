@@ -43,11 +43,12 @@ def metrics(since):
     })
     out.loc[out["homes"] < MIN_HOMES, ["kwh_home", "summer_ratio"]] = None
     months = sorted(m["month"].unique())
-    return out, months, first, last
+    pv.loc[homes[homes < MIN_HOMES].index] = None
+    return out, months, first, last, pv.round(0)
 
 
 def build(out_path, since):
-    data, months, first, last = metrics(since)
+    data, months, first, last, _ = metrics(since)
     geo = json.loads((ROOT / "geo" / "fsa_ontario_2021.geojson").read_text())
     for f in geo["features"]:
         p = f["properties"]
